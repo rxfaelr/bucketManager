@@ -1,4 +1,5 @@
 #!/bin/sh
+#teste
 
 DEPLOYDIR=/var/www/bucketManager/;
 
