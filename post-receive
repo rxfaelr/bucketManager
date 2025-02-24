@@ -1,0 +1,13 @@
+#!/bin/sh
+
+DEPLOYDIR=/var/www/bucketManager/;
+
+git --work-tree=$DEPLOYDIR --git-dir=/home/ubuntu/repos/bucketmanager checkout -f
+
+cd "$DEPLOYDIR";
+
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml down --remove-orphans
+docker compose -f docker-compose.prod.yml up -d --build -V
+docker image prune -f
+docker builder prune -f
