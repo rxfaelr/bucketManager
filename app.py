@@ -78,4 +78,4 @@ def download_folder():
     return send_file(zip_buffer, as_attachment=True, download_name=f"{folder.strip('/')}.zip")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000, debug=True)
+    app.run(host="0.0.0.0", port=3000)
