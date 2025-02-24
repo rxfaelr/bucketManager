@@ -5,11 +5,11 @@ import zipfile
 from io import BytesIO
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
 
 @app.route("/")
 def home():
     return render_template("index.html")
-    app.secret_key = "supersecretkey"
 @app.route("/save_credentials", methods=["POST"])
 def save_credentials():
     session['s3_endpoint'] = request.form.get("s3_endpoint")
