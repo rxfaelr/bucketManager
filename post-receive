@@ -2,7 +2,7 @@
 
 DEPLOYDIR=/var/www/bucketManager/;
 
-git --work-tree=$DEPLOYDIR --git-dir=/home/ubuntu/repos/bucketmanager checkout -f
+git --work-tree=$DEPLOYDIR --git-dir=/home/ubuntu/repos/bucketManager.git checkout -f
 
 cd "$DEPLOYDIR";
 
