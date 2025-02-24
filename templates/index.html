@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador S3</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        input {
+            margin-bottom: 10px;
+            display: block;
+            width: calc(100% - 20px);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 16px;
+        }
+        button {
+            margin-top: 10px;
+            cursor: pointer;
+            padding: 10px 15px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background: #e9ecef;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #loading {
+            display: none;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #007BFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Configurar Credenciais S3</h2>
+        <input type="text" id="s3_endpoint" placeholder="S3 Endpoint">
+        <input type="text" id="s3_access_key" placeholder="Access Key">
+        <input type="password" id="s3_secret_key" placeholder="Secret Key">
+        <input type="text" id="bucket_name" placeholder="Bucket Name">
+        <button onclick="saveCredentials()">Salvar Credenciais</button>
+
+        <h2>Listar Pastas do Bucket</h2>
+        <button onclick="fetchFolders()">Listar Pastas</button>
+        <ul id="folderList"></ul>
+
+        <h2>Listar Arquivos em uma Pasta</h2>
+        <input type="text" id="folder_name" placeholder="Nome da Pasta">
+        <button onclick="fetchFiles()">Listar Arquivos</button>
+        <ul id="fileList"></ul>
+
+        <h2>Baixar Pasta Completa</h2>
+        <input type="text" id="download_folder_name" placeholder="Nome da Pasta">
+        <button onclick="downloadFolder()">Baixar Pasta</button>
+        <p id="loading">Aguarde, baixando a pasta...</p>
+    </div>
+
+    <script>
+        async function saveCredentials() {
+            const response = await fetch('/save_credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    s3_endpoint: document.getElementById('s3_endpoint').value,
+                    s3_access_key: document.getElementById('s3_access_key').value,
+                    s3_secret_key: document.getElementById('s3_secret_key').value,
+                    bucket_name: document.getElementById('bucket_name').value
+                })
+            });
+            const data = await response.json();
+            alert(data.message);
+        }
+
+        async function fetchFolders() {
+            const response = await fetch('/list_folders');
+            const folders = await response.json();
+            const folderList = document.getElementById('folderList');
+            folderList.innerHTML = '';
+            folders.forEach(folder => {
+                const li = document.createElement('li');
+                li.textContent = folder;
+                folderList.appendChild(li);
+            });
+        }
+
+        async function fetchFiles() {
+            const folder = document.getElementById('folder_name').value;
+            if (!folder) {
+                alert("Digite o nome da pasta.");
+                return;
+            }
+            
+            const response = await fetch('/list_files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ folder })
+            });
+            const files = await response.json();
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            files.forEach(file => {
+                const li = document.createElement('li');
+                const a = document.createElement('a');
+                a.href = `/download_file?file=${file}`;
+                a.textContent = file;
+                a.download = file.split('/').pop();
+                li.appendChild(a);
+                fileList.appendChild(li);
+            });
+        }
+
+        function downloadFolder() {
+            const folder = document.getElementById('download_folder_name').value;
+            if (!folder) {
+                alert("Digite o nome da pasta para baixar.");
+                return;
+            }
+            document.getElementById('loading').style.display = 'block';
+            window.location.href = `/download_folder?folder=${folder}`;
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
