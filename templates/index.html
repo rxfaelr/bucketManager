@@ -96,6 +96,33 @@
         .delete-btn:hover {
             background-color: #c82333;
         }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #e9ecef;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        
+        .file-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .file-metadata {
+            font-size: 0.9em;
+            color: #666;
+            text-align: left;
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
@@ -172,25 +199,46 @@
             const files = await response.json();
             const fileList = document.getElementById('fileList');
             fileList.innerHTML = '';
+            
             files.forEach(file => {
                 const li = document.createElement('li');
-                const div = document.createElement('div');
-                div.className = 'file-actions';
+                li.className = 'file-item';
                 
-                // Download button
+                // File info section (name, size, date)
+                const fileInfo = document.createElement('div');
+                fileInfo.className = 'file-info';
+                
+                const fileName = document.createElement('span');
+                fileName.textContent = file.key.split('/').pop(); // Show only filename, not full path
+                
+                const metadata = document.createElement('div');
+                metadata.className = 'file-metadata';
+                metadata.innerHTML = `
+                    Tamanho: ${file.size}<br>
+                    Data: ${file.last_modified}
+                `;
+                
+                fileInfo.appendChild(fileName);
+                fileInfo.appendChild(metadata);
+                
+                // Actions section (download and delete buttons)
+                const actions = document.createElement('div');
+                actions.className = 'file-actions';
+                
                 const downloadBtn = document.createElement('button');
-                downloadBtn.textContent = file;
-                downloadBtn.onclick = () => window.location.href = `/download_file?file=${file}`;
+                downloadBtn.textContent = 'Baixar';
+                downloadBtn.onclick = () => window.location.href = `/download_file?file=${file.key}`;
                 
-                // Delete button
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Deletar';
                 deleteBtn.className = 'delete-btn';
-                deleteBtn.onclick = () => deleteFile(file);
+                deleteBtn.onclick = () => deleteFile(file.key);
                 
-                div.appendChild(downloadBtn);
-                div.appendChild(deleteBtn);
-                li.appendChild(div);
+                actions.appendChild(downloadBtn);
+                actions.appendChild(deleteBtn);
+                
+                li.appendChild(fileInfo);
+                li.appendChild(actions);
                 fileList.appendChild(li);
             });
         }

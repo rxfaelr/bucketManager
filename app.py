@@ -3,6 +3,8 @@ import boto3
 import os
 import zipfile
 from io import BytesIO
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -40,7 +42,35 @@ def list_files():
         aws_secret_access_key=session.get('s3_secret_key')
     )
     response = s3_client.list_objects_v2(Bucket=session.get('bucket_name'), Prefix=folder)
-    files = [obj['Key'] for obj in response.get("Contents", []) if obj['Key'] != folder]
+    
+    # Get UTC-3 timezone
+    brazil_tz = pytz.timezone('America/Sao_Paulo')
+    
+    files = []
+    for obj in response.get("Contents", []):
+        if obj['Key'] != folder:
+            # Convert size to human readable format
+            size = obj['Size']
+            if size < 1024:
+                size_str = f"{size} B"
+            elif size < 1024 * 1024:
+                size_str = f"{size/1024:.1f} KB"
+            elif size < 1024 * 1024 * 1024:
+                size_str = f"{size/(1024*1024):.1f} MB"
+            else:
+                size_str = f"{size/(1024*1024*1024):.1f} GB"
+
+            # Convert UTC time to UTC-3
+            utc_time = obj['LastModified']
+            local_time = utc_time.astimezone(brazil_tz)
+            formatted_date = local_time.strftime('%d/%m/%Y %H:%M:%S')
+
+            files.append({
+                'key': obj['Key'],
+                'size': size_str,
+                'last_modified': formatted_date
+            })
+    
     return jsonify(files)
 
 @app.route("/download_file", methods=["GET"])
