@@ -52,8 +52,31 @@ def download_file():
         aws_access_key_id=session.get('s3_access_key'),
         aws_secret_access_key=session.get('s3_secret_key')
     )
+    
+    
+    response = s3_client.head_object(Bucket=session.get('bucket_name'), Key=file_key)
+    file_size = response['ContentLength']
+    
+    
     file_obj = s3_client.get_object(Bucket=session.get('bucket_name'), Key=file_key)
-    return send_file(file_obj['Body'], as_attachment=True, download_name=os.path.basename(file_key))
+    
+    def generate():
+        chunk_size = 8192  # 8KB chunks
+        downloaded = 0
+        for chunk in file_obj['Body'].iter_chunks(chunk_size):
+            downloaded += len(chunk)
+            yield chunk
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename={os.path.basename(file_key)}',
+        'Content-Length': str(file_size)
+    }
+    
+    return app.response_class(
+        generate(),
+        mimetype='application/octet-stream',
+        headers=headers
+    )
 
 @app.route("/download_folder", methods=["GET"])
 def download_folder():
@@ -75,6 +98,25 @@ def download_folder():
     
     zip_buffer.seek(0)
     return send_file(zip_buffer, as_attachment=True, download_name=f"{folder.strip('/')}.zip")
+
+@app.route("/delete_file", methods=["POST"])
+def delete_file():
+    file_key = request.form.get("file")
+    try:
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=session.get('s3_endpoint'),
+            aws_access_key_id=session.get('s3_access_key'),
+            aws_secret_access_key=session.get('s3_secret_key')
+        )
+        
+        s3_client.delete_object(
+            Bucket=session.get('bucket_name'),
+            Key=file_key
+        )
+        return jsonify({"message": "Arquivo deletado com sucesso!"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)

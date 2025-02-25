@@ -58,6 +58,44 @@
             font-weight: bold;
             color: #007BFF;
         }
+        .progress-container {
+            display: none;
+            margin: 20px 0;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #007BFF;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        
+        .file-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .delete-btn {
+            background-color: #dc3545;
+        }
+        
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -82,6 +120,13 @@
         <input type="text" id="download_folder_name" placeholder="Nome da Pasta">
         <button onclick="downloadFolder()">Baixar Pasta</button>
         <p id="loading">Aguarde, baixando a pasta...</p>
+
+        <div class="progress-container" id="downloadProgress">
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">0%</div>
+        </div>
     </div>
 
     <script>
@@ -129,26 +174,58 @@
             fileList.innerHTML = '';
             files.forEach(file => {
                 const li = document.createElement('li');
-                const a = document.createElement('a');
-                a.href = `/download_file?file=${file}`;
-                a.textContent = file;
-                a.download = file.split('/').pop();
-                li.appendChild(a);
+                const div = document.createElement('div');
+                div.className = 'file-actions';
+                
+                // Download button
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = file;
+                downloadBtn.onclick = () => window.location.href = `/download_file?file=${file}`;
+                
+                // Delete button
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Deletar';
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.onclick = () => deleteFile(file);
+                
+                div.appendChild(downloadBtn);
+                div.appendChild(deleteBtn);
+                li.appendChild(div);
                 fileList.appendChild(li);
             });
         }
 
-        function downloadFolder() {
+        async function downloadFolder() {
             const folder = document.getElementById('download_folder_name').value;
             if (!folder) {
                 alert("Digite o nome da pasta para baixar.");
                 return;
             }
-            document.getElementById('loading').style.display = 'block';
             window.location.href = `/download_folder?folder=${folder}`;
-            setTimeout(() => {
-                document.getElementById('loading').style.display = 'none';
-            }, 5000);
+        }
+
+        async function deleteFile(file) {
+            if (confirm(`Tem certeza que deseja deletar o arquivo "${file}"?`)) {
+                try {
+                    const response = await fetch('/delete_file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ file })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        alert(data.message);
+                        // Refresh the file list
+                        fetchFiles();
+                    } else {
+                        throw new Error(data.error || 'Erro ao deletar arquivo');
+                    }
+                } catch (err) {
+                    alert('Erro ao deletar arquivo: ' + err.message);
+                }
+            }
         }
     </script>
 </body>
