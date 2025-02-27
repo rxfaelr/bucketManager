@@ -148,5 +148,26 @@ def delete_file():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/get_folder_files", methods=["GET"])
+def get_folder_files():
+    folder = request.args.get("folder")
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=session.get('s3_endpoint'),
+        aws_access_key_id=session.get('s3_access_key'),
+        aws_secret_access_key=session.get('s3_secret_key')
+    )
+    response = s3_client.list_objects_v2(Bucket=session.get('bucket_name'), Prefix=folder)
+    
+    files = []
+    for obj in response.get("Contents", []):
+        if obj['Key'] != folder:  # Skip the folder itself
+            files.append({
+                'key': obj['Key'],
+                'size': obj['Size']
+            })
+    
+    return jsonify(files)
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=3000)
