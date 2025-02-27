@@ -127,12 +127,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Configurar Credenciais S3</h2>
-        <input type="text" id="s3_endpoint" placeholder="S3 Endpoint">
-        <input type="text" id="s3_access_key" placeholder="Access Key">
-        <input type="password" id="s3_secret_key" placeholder="Secret Key">
-        <input type="text" id="bucket_name" placeholder="Bucket Name">
-        <button onclick="saveCredentials()">Salvar Credenciais</button>
+        <h2>Gerenciador S3</h2>
 
         <h2>Listar Pastas do Bucket</h2>
         <button onclick="fetchFolders()">Listar Pastas</button>
@@ -157,21 +152,6 @@
     </div>
 
     <script>
-        async function saveCredentials() {
-            const response = await fetch('/save_credentials', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    s3_endpoint: document.getElementById('s3_endpoint').value,
-                    s3_access_key: document.getElementById('s3_access_key').value,
-                    s3_secret_key: document.getElementById('s3_secret_key').value,
-                    bucket_name: document.getElementById('bucket_name').value
-                })
-            });
-            const data = await response.json();
-            alert(data.message);
-        }
-
         async function fetchFolders() {
             const response = await fetch('/list_folders');
             const folders = await response.json();

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arquivos - {{ folder_name }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px; 
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .path-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .breadcrumb {
+            margin-bottom: 0;
+            padding: 0;
+            background: none;
+            border-radius: 0;
+        }
+        
+        .breadcrumb a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 1.2em;
+            color: #2c3e50;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        .list-item:hover {
+            background: #e9ecef;
+        }
+        
+        .item-info {
+            flex-grow: 1;
+        }
+        
+        .item-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .item-metadata {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .folder-link {
+            color: #2c3e50;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+        
+        .folder-link:hover {
+            color: #1a252f;
+        }
+        
+        .download-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        .download-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .folder-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .download-all-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .download-all-btn:hover {
+            background-color: #218838;
+        }
+        
+        .download-progress {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .progress-text {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+        }
+        
+        .download-queue {
+            list-style: none;
+            padding: 0;
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        
+        .queue-item {
+            padding: 5px;
+            color: #6c757d;
+        }
+        
+        .queue-item.done {
+            color: #28a745;
+        }
+        
+        .queue-item.error {
+            color: #dc3545;
+        }
+        
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .page-title {
+            margin: 0;
+            color: #333;
+        }
+        
+        .navigation {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .back-arrow {
+            color: #2c3e50;
+            text-decoration: none;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .back-arrow:hover {
+            color: #1a252f;
+        }
+        
+        .current-folder {
+            font-size: 16px;
+            color: #6c757d;
+        }
+        
+        .folder-path {
+            font-size: 16px;
+            color: #6c757d;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .folder-path a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        
+        .folder-path a:hover {
+            text-decoration: underline;
+        }
+        
+        .folder-path-separator {
+            margin: 0 5px;
+            color: #6c757d;
+        }
+        
+        .current-path {
+            color: #2c3e50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="folder-path">
+            {% set parts = current_path.strip('/').split('/') %}
+            {% set current = namespace(path='') %}
+            {% for part in parts %}
+                {% set current.path = current.path + part + '/' %}
+                {% if not loop.last %}
+                    <a href="/{{ current.path }}">{{ part }}</a>
+                    <span class="folder-path-separator">/</span>
+                {% else %}
+                    <span class="current-path">{{ part }}</span>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="page-header">
+            <h1 class="page-title">
+                {% if '/' in current_path.strip('/') %}
+                    Arquivos em /{{ current_path.strip('/').split('/')[-1] }}
+                {% else %}
+                    Arquivos
+                {% endif %}
+            </h1>
+            {% if '/' in current_path.strip('/') or (files and not subdirectories) %}
+            <a href="#" onclick="downloadFolder('{{ current_path }}'); return false;" class="download-all-btn">
+                📥 Baixar Tudo
+            </a>
+            {% endif %}
+        </div>
+        
+        {% if subdirectories and not '/' in current_path.strip('/') %}
+        <div class="section">
+            <div class="section-title">📁 Subdiretórios</div>
+            <ul class="list">
+                {% for subdir in subdirectories %}
+                <li class="list-item">
+                    <div class="item-info">
+                        <a href="/{{ subdir.path }}" class="folder-link">
+                            <div class="item-name">{{ subdir.name }}/</div>
+                        </a>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if files and ('/' in current_path.strip('/') or not subdirectories) %}
+        <div class="section">
+            <div class="section-title">📄 Arquivos</div>
+            <ul class="list">
+                {% for file in files %}
+                <li class="list-item">
+                    <div class="item-info">
+                        <div class="item-name">{{ file.name }}</div>
+                        <div class="item-metadata">
+                            Tamanho: {{ file.size }} | Data: {{ file.last_modified }}
+                        </div>
+                    </div>
+                    <a href="{{ url_for('download_file', file_path=file.key) }}" class="download-btn">
+                        Baixar
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if not subdirectories and not files and '/' in current_path.strip('/') %}
+        <p>Esta pasta está vazia.</p>
+        {% endif %}
+    </div>
+
+    <div id="downloadProgress" class="progress-text"></div>
+    
+    <script>
+    async function downloadFolder(folderPath) {
+        try {
+            const progressText = document.getElementById('downloadProgress');
+            progressText.style.display = 'block';
+            
+            const response = await fetch(`/list-folder-files/${folderPath}`);
+            const files = await response.json();
+            
+            if (files.length === 0) {
+                progressText.textContent = 'Pasta vazia';
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 2000);
+                return;
+            }
+
+            let downloadedCount = 0;
+            progressText.textContent = 'Iniciando downloads...';
+            
+            for (const file of files) {
+                try {
+                    const percentage = Math.round((downloadedCount / files.length) * 100);
+                    progressText.textContent = `Baixando arquivos... ${percentage}% iniciado`;
+                    
+                    const link = document.createElement('a');
+                    link.href = `/download/${file.key}`;
+                    link.download = file.name;
+                    
+                    const downloadPromise = new Promise((resolve, reject) => {
+                        link.onclick = () => {
+                            document.body.removeChild(link);
+                            resolve();
+                        };
+                        
+                        setTimeout(() => {
+                            if (document.body.contains(link)) {
+                                document.body.removeChild(link);
+                                reject(new Error('Download timeout'));
+                            }
+                        }, 5000);
+                    });
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    await downloadPromise;
+                    downloadedCount++;
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                } catch (error) {
+                    console.error(`Erro ao baixar ${file.name}:`, error);
+                }
+            }
+            
+            progressText.textContent = 'Baixando arquivos... 100% concluído';
+            setTimeout(() => {
+                progressText.style.display = 'none';
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Erro ao baixar pasta:', error);
+            const progressText = document.getElementById('downloadProgress');
+            progressText.textContent = 'Erro ao baixar arquivos. Tente novamente.';
+            progressText.style.backgroundColor = '#dc3545';
+            setTimeout(() => {
+                progressText.style.display = 'none';
+                progressText.style.backgroundColor = '#28a745';
+            }, 3000);
+        }
+    }
+    </script>
+</body>
+</html> 
