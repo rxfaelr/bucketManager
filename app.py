@@ -161,7 +161,7 @@ def get_folder_files():
     
     files = []
     for obj in response.get("Contents", []):
-        if obj['Key'] != folder:  # Skip the folder itself
+        if obj['Key'] != folder:
             files.append({
                 'key': obj['Key'],
                 'size': obj['Size']
