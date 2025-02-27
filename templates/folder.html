@@ -290,7 +290,7 @@
             {% endif %}
         </div>
         
-        {% if subdirectories and not '/' in current_path.strip('/') %}
+        {% if subdirectories %}
         <div class="section">
             <div class="section-title">📁 Subdiretórios</div>
             <ul class="list">
@@ -307,7 +307,7 @@
         </div>
         {% endif %}
         
-        {% if files and ('/' in current_path.strip('/') or not subdirectories) %}
+        {% if files %}
         <div class="section">
             <div class="section-title">📄 Arquivos</div>
             <ul class="list">
@@ -328,7 +328,7 @@
         </div>
         {% endif %}
         
-        {% if not subdirectories and not files and '/' in current_path.strip('/') %}
+        {% if not subdirectories and not files %}
         <p>Esta pasta está vazia.</p>
         {% endif %}
     </div>

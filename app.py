@@ -38,7 +38,7 @@ def format_size(size):
 
 @app.route('/')
 def index():
-    return "Bucket Manager - Please specify a folder in the URL"
+    return render_template('error.html')
 
 @app.route('/<path:folder>')
 def folder_view(folder):
@@ -47,49 +47,77 @@ def folder_view(folder):
     try:
         s3_client = get_s3_client()
         
-        subdirs_response = s3_client.list_objects_v2(
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=folder_path
+        )
+        
+        subdirectories = set()
+        files = []
+        brazil_tz = pytz.timezone('America/Sao_Paulo')
+        
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                key = obj['Key']
+                
+                if key == folder_path:
+                    continue
+                
+                relative_path = key[len(folder_path):]
+                if not relative_path:
+                    continue
+                
+                parts = relative_path.rstrip('/').split('/')
+                
+                if len(parts) > 1:
+                    subdirectories.add(parts[0])
+                else:
+                    utc_time = obj['LastModified']
+                    local_time = utc_time.astimezone(brazil_tz)
+                    
+                    files.append({
+                        'name': parts[0],
+                        'key': key,
+                        'size': format_size(obj['Size']),
+                        'last_modified': local_time.strftime('%d/%m/%Y %H:%M:%S')
+                    })
+        
+        dir_response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME,
             Prefix=folder_path,
             Delimiter='/'
         )
         
-        subdirectories = []
-        for prefix in subdirs_response.get('CommonPrefixes', []):
-            subdir_path = prefix['Prefix']
-            subdir_name = subdir_path.rstrip('/').split('/')[-1]
-            subdirectories.append({
-                'name': subdir_name,
-                'path': subdir_path
-            })
+        for prefix in dir_response.get('CommonPrefixes', []):
+            prefix_path = prefix.get('Prefix', '')
+            if prefix_path != folder_path:
+                dir_name = prefix_path[len(folder_path):].rstrip('/')
+                if dir_name:
+                    subdirectories.add(dir_name)
         
-        files = []
-        brazil_tz = pytz.timezone('America/Sao_Paulo')
+        subdirs_list = [
+            {
+                'name': subdir,
+                'path': f"{folder_path}{subdir}/"
+            }
+            for subdir in subdirectories
+        ]
         
-        for obj in subdirs_response.get('Contents', []):
-            if obj['Key'] != folder_path:
-                relative_path = obj['Key'][len(folder_path):]
-                if '/' not in relative_path:
-                    utc_time = obj['LastModified']
-                    local_time = utc_time.astimezone(brazil_tz)
-                    
-                    files.append({
-                        'name': relative_path,
-                        'key': obj['Key'],
-                        'size': format_size(obj['Size']),
-                        'last_modified': local_time.strftime('%d/%m/%Y %H:%M:%S')
-                    })
-        
-        subdirectories.sort(key=lambda x: x['name'].lower())
+        subdirs_list.sort(key=lambda x: x['name'].lower())
         files.sort(key=lambda x: x['name'].lower())
         
-        return render_template('folder.html',
-                             folder_name=folder,
-                             current_path=folder_path,
-                             subdirectories=subdirectories,
-                             files=files)
-    
+        if subdirs_list or files or folder_path == '':
+            return render_template('folder.html',
+                                folder_name=folder,
+                                current_path=folder_path,
+                                subdirectories=subdirs_list,
+                                files=files)
+        else:
+            return render_template('error.html')
+            
     except Exception as e:
-        return f"Erro ao acessar a pasta: {str(e)}", 500
+        print(f"Error accessing path {folder_path}: {str(e)}")
+        return render_template('error.html')
 
 @app.route('/download/<path:file_path>')
 def download_file(file_path):
