@@ -320,7 +320,10 @@
     
     <script>
     function encodeFolder(folder) {
-        return btoa(folder);
+        return btoa(folder)
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
     }
 
     async function downloadFolder(folderPath) {

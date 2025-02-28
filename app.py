@@ -38,20 +38,25 @@ def format_size(size):
         return f"{size/(1024*1024*1024):.1f} GB"
 
 def encode_folder_path(folder):
-    """Encode folder path to base64"""
-    return base64.b64encode(folder.encode()).decode()
+    """Encode folder path to URL-safe base64"""
+    return base64.urlsafe_b64encode(folder.encode()).decode()
 
 def decode_folder_path(encoded_path):
-    """Decode base64 folder path"""
+    """Decode URL-safe base64 folder path"""
     try:
-        return base64.b64decode(encoded_path.encode()).decode()
+        # Add padding if necessary
+        padding = 4 - (len(encoded_path) % 4)
+        if padding != 4:
+            encoded_path += '=' * padding
+        return base64.urlsafe_b64decode(encoded_path.encode()).decode()
     except:
+        print(f"Failed to decode path: {encoded_path}")
         return None
 
-# Add base64 template filter
+# Update the template filter
 @app.template_filter('b64encode')
 def b64encode_filter(s):
-    return base64.b64encode(s.encode()).decode()
+    return base64.urlsafe_b64encode(s.encode()).decode()
 
 @app.route('/')
 def index():
@@ -60,9 +65,15 @@ def index():
 @app.route('/<path:folder>')
 def folder_view(folder):
     try:
+        # Add debug logging
+        print(f"Received folder path: {folder}")
+        
         # Try to decode the entire path
         decoded_folder = decode_folder_path(folder)
+        print(f"Decoded folder path: {decoded_folder}")
+        
         if not decoded_folder:
+            print("Failed to decode folder path")
             return render_template('error.html')
             
         # Verify if the folder exists
@@ -73,13 +84,17 @@ def folder_view(folder):
             MaxKeys=1
         )
         
+        print(f"S3 response: {response}")
+        
         if 'Contents' in response:
             return handle_folder_view(decoded_folder, encoded_main_folder=folder)
+        else:
+            print(f"No contents found for folder: {decoded_folder}")
+            return render_template('error.html')
             
-    except:
-        pass
-        
-    return render_template('error.html')
+    except Exception as e:
+        print(f"Error in folder_view: {str(e)}")
+        return render_template('error.html')
 
 def handle_folder_view(folder, encoded_main_folder):
    
