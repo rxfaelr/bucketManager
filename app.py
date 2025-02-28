@@ -50,7 +50,6 @@ def decode_folder_path(encoded_path):
             encoded_path += '=' * padding
         return base64.urlsafe_b64decode(encoded_path.encode()).decode()
     except:
-        print(f"Failed to decode path: {encoded_path}")
         return None
 
 
@@ -86,8 +85,9 @@ def folder_view(folder):
         return render_template('error.html')
 
 def handle_folder_view(folder, encoded_main_folder):
-   
     folder_path = f"{folder}/" if not folder.endswith('/') else folder
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
     
     try:
         s3_client = get_s3_client()
@@ -165,18 +165,28 @@ def handle_folder_view(folder, encoded_main_folder):
                 'encoded_path': encode_folder_path(current_path)
             })
         
+        total_files = len(files)
+        total_pages = (total_files + per_page - 1) // per_page
+        page = min(max(1, page), total_pages) if total_pages > 0 else 1
+        
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_files = files[start_idx:end_idx]
+
         if subdirs_list or files or folder_path == '':
             return render_template('folder.html',
                                 folder_name=folder,
                                 current_path=folder_path,
                                 subdirectories=subdirs_list,
-                                files=files,
-                                breadcrumb_paths=breadcrumb_paths)
+                                files=paginated_files,
+                                breadcrumb_paths=breadcrumb_paths,
+                                current_page=page,
+                                total_pages=total_pages,
+                                total_files=total_files)
         else:
             return render_template('error.html')
             
     except Exception as e:
-        print(f"Error accessing path {folder_path}: {str(e)}")
         return render_template('error.html')
 
 @app.route('/download/<encoded_path>')
@@ -342,7 +352,6 @@ def list_folder_files(encoded_path):
         return jsonify(files)
         
     except Exception as e:
-        print(f"Error listing files: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

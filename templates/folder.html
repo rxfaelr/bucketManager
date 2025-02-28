@@ -239,6 +239,40 @@
             color: #6c757d;
             margin-left: 8px;
         }
+        
+        .item-number {
+            min-width: 50px;
+            color: #6c757d;
+            font-weight: bold;
+            margin-right: 15px;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 30px;
+            padding: 20px 0;
+        }
+        
+        .page-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        
+        .page-btn:hover {
+            background-color: #0056b3;
+        }
+        
+        .page-info {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -291,11 +325,12 @@
         {% if files %}
         <div class="section">
             <div class="section-title">
-                📄 Arquivos <span class="files-count">(Total: {{ files|length }})</span>
+                📄 Arquivos <span class="files-count">(Total: {{ total_files }})</span>
             </div>
             <ul class="list">
                 {% for file in files %}
                 <li class="list-item">
+                    <div class="item-number">{{ (current_page - 1) * 100 + loop.index }}.</div>
                     <div class="item-info">
                         <div class="item-name">{{ file.name }}</div>
                         <div class="item-metadata">
@@ -308,6 +343,20 @@
                 </li>
                 {% endfor %}
             </ul>
+
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if current_page > 1 %}
+                <a href="?page={{ current_page - 1 }}" class="page-btn">← Anterior</a>
+                {% endif %}
+                
+                <span class="page-info">Página {{ current_page }} de {{ total_pages }}</span>
+                
+                {% if current_page < total_pages %}
+                <a href="?page={{ current_page + 1 }}" class="page-btn">Próxima →</a>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
         {% endif %}
         
