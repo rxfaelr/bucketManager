@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template
+from flask import Flask, request, jsonify, send_file, render_template, redirect, url_for
 import boto3
 import os
 import zipfile
@@ -6,6 +6,7 @@ from io import BytesIO
 from datetime import datetime
 import pytz
 from dotenv import load_dotenv
+import base64
 
 # Load environment variables
 load_dotenv()
@@ -36,17 +37,56 @@ def format_size(size):
     else:
         return f"{size/(1024*1024*1024):.1f} GB"
 
+def encode_folder_path(folder):
+    """Encode folder path to base64"""
+    return base64.b64encode(folder.encode()).decode()
+
+def decode_folder_path(encoded_path):
+    """Decode base64 folder path"""
+    try:
+        return base64.b64decode(encoded_path.encode()).decode()
+    except:
+        return None
+
+# Add base64 template filter
+@app.template_filter('b64encode')
+def b64encode_filter(s):
+    return base64.b64encode(s.encode()).decode()
+
 @app.route('/')
 def index():
     return render_template('error.html')
 
 @app.route('/<path:folder>')
 def folder_view(folder):
+    try:
+        # Try to decode the entire path
+        decoded_folder = decode_folder_path(folder)
+        if not decoded_folder:
+            return render_template('error.html')
+            
+        # Verify if the folder exists
+        s3_client = get_s3_client()
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=decoded_folder + '/',
+            MaxKeys=1
+        )
+        
+        if 'Contents' in response:
+            return handle_folder_view(decoded_folder, encoded_main_folder=folder)
+            
+    except:
+        pass
+        
+    return render_template('error.html')
+
+def handle_folder_view(folder, encoded_main_folder):
+   
     folder_path = f"{folder}/" if not folder.endswith('/') else folder
     
     try:
         s3_client = get_s3_client()
-        
         response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME,
             Prefix=folder_path
@@ -95,10 +135,12 @@ def folder_view(folder):
                 if dir_name:
                     subdirectories.add(dir_name)
         
+       
+        parts = folder_path.split('/')
         subdirs_list = [
             {
                 'name': subdir,
-                'path': f"{folder_path}{subdir}/"
+                'path': encode_folder_path(f"{folder_path}{subdir}"),  # Encode the full path
             }
             for subdir in subdirectories
         ]
@@ -106,12 +148,26 @@ def folder_view(folder):
         subdirs_list.sort(key=lambda x: x['name'].lower())
         files.sort(key=lambda x: x['name'].lower())
         
+       
+        breadcrumb_paths = []
+        current_path = ''
+        for part in parts[:-1]:  
+            if current_path:
+                current_path += f"/{part}"
+            else:
+                current_path = part
+            breadcrumb_paths.append({
+                'name': part,
+                'encoded_path': encode_folder_path(current_path)
+            })
+        
         if subdirs_list or files or folder_path == '':
             return render_template('folder.html',
                                 folder_name=folder,
                                 current_path=folder_path,
                                 subdirectories=subdirs_list,
-                                files=files)
+                                files=files,
+                                breadcrumb_paths=breadcrumb_paths)
         else:
             return render_template('error.html')
             
@@ -119,8 +175,12 @@ def folder_view(folder):
         print(f"Error accessing path {folder_path}: {str(e)}")
         return render_template('error.html')
 
-@app.route('/download/<path:file_path>')
-def download_file(file_path):
+@app.route('/download/<encoded_path>')
+def download_file(encoded_path):
+    file_path = decode_folder_path(encoded_path)
+    if not file_path:
+        return jsonify({"error": "Invalid path"}), 404
+        
     try:
         s3_client = get_s3_client()
         response = s3_client.head_object(Bucket=BUCKET_NAME, Key=file_path)
@@ -152,7 +212,11 @@ def list_folders():
 
 @app.route("/list_files", methods=["POST"])
 def list_files():
-    folder = request.form.get("folder", "")
+    encoded_folder = request.form.get("folder", "")
+    folder = decode_folder_path(encoded_folder)
+    if not folder:
+        return jsonify({"error": "Invalid folder path"}), 400
+        
     s3_client = get_s3_client()
     response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=folder)
     
@@ -183,8 +247,12 @@ def list_files():
     
     return jsonify(files)
 
-@app.route('/download-folder/<path:folder_path>')
-def download_folder(folder_path):
+@app.route('/download-folder/<encoded_path>')
+def download_folder(encoded_path):
+    folder_path = decode_folder_path(encoded_path)
+    if not folder_path:
+        return jsonify({"error": "Invalid path"}), 404
+        
     try:
         s3_client = get_s3_client()
         response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=folder_path)
@@ -242,13 +310,17 @@ def get_folder_files():
     
     return jsonify(files)
 
-@app.route('/list-folder-files/<path:folder_path>')
-def list_folder_files(folder_path):
+@app.route('/list-folder-files/<encoded_path>')
+def list_folder_files(encoded_path):
     try:
+        folder_path = decode_folder_path(encoded_path)
+        if not folder_path:
+            return jsonify([])
+            
         s3_client = get_s3_client()
         response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME,
-            Prefix=folder_path,
+            Prefix=folder_path + '/' if not folder_path.endswith('/') else folder_path,
             Delimiter='/'
         )
         
@@ -257,17 +329,16 @@ def list_folder_files(folder_path):
         
         files = []
         for obj in response.get("Contents", []):
-            if obj["Key"] != folder_path:
-                relative_path = obj["Key"][len(folder_path):]
-                if '/' not in relative_path:
-                    files.append({
-                        'key': obj['Key'],
-                        'name': os.path.basename(obj['Key'])
-                    })
+            if obj["Key"] != folder_path and obj["Key"] != folder_path + '/':
+                files.append({
+                    'key': obj['Key'],
+                    'name': os.path.basename(obj['Key'])
+                })
         
         return jsonify(files)
         
     except Exception as e:
+        print(f"Error listing files: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

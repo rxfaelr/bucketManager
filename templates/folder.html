@@ -231,48 +231,29 @@
         }
         
         .folder-path {
-            font-size: 16px;
+            display: none;
+        }
+        
+        .files-count {
+            font-size: 0.9em;
             color: #6c757d;
-            margin-bottom: 20px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 5px;
-        }
-        
-        .folder-path a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        
-        .folder-path a:hover {
-            text-decoration: underline;
-        }
-        
-        .folder-path-separator {
-            margin: 0 5px;
-            color: #6c757d;
-        }
-        
-        .current-path {
-            color: #2c3e50;
-            font-weight: bold;
+            margin-left: 8px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="folder-path">
-            {% set parts = current_path.strip('/').split('/') %}
-            {% set current = namespace(path='') %}
-            {% for part in parts %}
-                {% set current.path = current.path + part + '/' %}
-                {% if not loop.last %}
-                    <a href="/{{ current.path }}">{{ part }}</a>
-                    <span class="folder-path-separator">/</span>
-                {% else %}
-                    <span class="current-path">{{ part }}</span>
-                {% endif %}
-            {% endfor %}
+        <div class="navigation">
+            {% if '/' in current_path.strip('/') %}
+                {% set parts = current_path.strip('/').split('/') %}
+                {% set parent_index = breadcrumb_paths|length - 1 %}
+                <a href="/{{ breadcrumb_paths[parent_index - 1].encoded_path if parent_index > 0 else '' }}" class="back-arrow">
+                    ←
+                </a>
+                <span class="current-folder">{{ parts[-1] }}</span>
+            {% else %}
+                <span class="current-folder">Pasta Principal</span>
+            {% endif %}
         </div>
 
         <div class="page-header">
@@ -309,7 +290,9 @@
         
         {% if files %}
         <div class="section">
-            <div class="section-title">📄 Arquivos</div>
+            <div class="section-title">
+                📄 Arquivos <span class="files-count">(Total: {{ files|length }})</span>
+            </div>
             <ul class="list">
                 {% for file in files %}
                 <li class="list-item">
@@ -319,7 +302,7 @@
                             Tamanho: {{ file.size }} | Data: {{ file.last_modified }}
                         </div>
                     </div>
-                    <a href="{{ url_for('download_file', file_path=file.key) }}" class="download-btn">
+                    <a href="{{ url_for('download_file', encoded_path=file.key|string|b64encode) }}" class="download-btn">
                         Baixar
                     </a>
                 </li>
@@ -336,15 +319,24 @@
     <div id="downloadProgress" class="progress-text"></div>
     
     <script>
+    function encodeFolder(folder) {
+        return btoa(folder);
+    }
+
     async function downloadFolder(folderPath) {
         try {
             const progressText = document.getElementById('downloadProgress');
             progressText.style.display = 'block';
             
-            const response = await fetch(`/list-folder-files/${folderPath}`);
+           
+            const cleanPath = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
+            const encodedPath = encodeFolder(cleanPath);
+            
+            
+            const response = await fetch(`/list-folder-files/${encodedPath}`);
             const files = await response.json();
             
-            if (files.length === 0) {
+            if (!files || files.length === 0 || files.error) {
                 progressText.textContent = 'Pasta vazia';
                 setTimeout(() => {
                     progressText.style.display = 'none';
@@ -361,7 +353,8 @@
                     progressText.textContent = `Baixando arquivos... ${percentage}% iniciado`;
                     
                     const link = document.createElement('a');
-                    link.href = `/download/${file.key}`;
+                  
+                    link.href = `/download/${encodeFolder(file.key)}`;
                     link.download = file.name;
                     
                     const downloadPromise = new Promise((resolve, reject) => {
@@ -391,7 +384,7 @@
                 }
             }
             
-            progressText.textContent = 'Baixando arquivos... 100% concluído';
+            progressText.textContent = 'Baixando arquivos... 100% iniciado';
             setTimeout(() => {
                 progressText.style.display = 'none';
             }, 3000);
