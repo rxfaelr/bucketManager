@@ -75,7 +75,6 @@ def decode_folder_path(encrypted_url):
     try:
         parts = encrypted_url.split('.', 1)
         if len(parts) != 2:
-            print(f"Invalid URL format: {encrypted_url}")
             return None
             
         iv_hex, encrypted_hex = parts
@@ -87,20 +86,12 @@ def decode_folder_path(encrypted_url):
         try:
             iv = binascii.unhexlify(iv_hex)
             if len(iv) != 16:
-                print(f"Invalid IV length: {len(iv)} bytes. Must be 16 bytes (32 hex characters).")
                 return None
         except binascii.Error as e:
-            print(f"Invalid IV format: {str(e)}")
             return None
             
-        print(f"Original key: {original_key}")
-        print(f"SHA-256 key (hex): {binascii.hexlify(key).decode('utf-8')}")
-        print(f"SHA-256 key length: {len(key)} bytes")
-        print(f"IV (hex): {iv_hex}")
-        print(f"IV length: {len(iv)} bytes")
 
         if not encrypted_hex or len(encrypted_hex) % 2 != 0:
-            print(f"Invalid encrypted hex string: {encrypted_hex}")
             return None
             
         encrypted_data = binascii.unhexlify(encrypted_hex)
@@ -113,12 +104,10 @@ def decode_folder_path(encrypted_url):
             unpadded_data = unpad(decrypted_data, AES.block_size)
             result = unpadded_data.decode('utf-8')
         except Exception as padding_error:
-            print(f"Unpadding error, trying legacy method: {str(padding_error)}")
             result = decrypted_data.decode('utf-8').rstrip()
             
         return result
     except Exception as e:
-        print(f"Decryption error: {str(e)}")
         return None
 
 def extract_url_components(decoded_data):
@@ -134,7 +123,6 @@ def extract_url_components(decoded_data):
         
         return folder_name, course_id, user_id
     except Exception as e:
-        print(f"Error extracting URL components: {str(e)}")
         return None, None, None
 
 @app.template_filter('b64encode')
@@ -161,21 +149,17 @@ def folder_view(encoded_path):
             
         decoded_data = decode_folder_path(encoded_path)
         if not decoded_data:
-            print(f"Failed to decode folder path: {encoded_path}")
             return render_template('error.html')
         
         folder_name, course_id, user_id = extract_url_components(decoded_data)
         
         if not folder_name:
-            print(f"Failed to extract folder name from: {decoded_data}")
             return render_template('error.html')
             
-        print(f"Decoded components - Folder/Course ID: {folder_name}, User ID: {user_id}")
         
         if course_id and user_id:
             has_permission = check_editor_permission(course_id, user_id)
             if not has_permission:
-                print(f"Access denied for user {user_id} to course {course_id}")
                 return render_template('no_permission.html', 
                                       course_id=course_id, 
                                       user_id=user_id)
@@ -191,11 +175,9 @@ def folder_view(encoded_path):
             return handle_folder_view(folder_name, encoded_main_folder=encoded_path, 
                                      course_id=course_id, user_id=user_id)
         else:
-            print(f"Folder not found: {folder_name}")
             return render_template('error.html')
             
     except Exception as e:
-        print(f"Error in folder_view: {str(e)}")
         return render_template('error.html')
 
 def handle_folder_view(folder_path, encoded_main_folder=None, course_id=None, user_id=None):
@@ -285,7 +267,6 @@ def handle_folder_view(folder_path, encoded_main_folder=None, course_id=None, us
                               user_id=user_id)
                               
     except Exception as e:
-        print(f"Error handling folder view: {str(e)}")
         return render_template('error.html')
 
 @app.route('/download/<encoded_path>')
@@ -294,15 +275,12 @@ def download_file(encoded_path):
         # Decode the encrypted path
         decoded_path = decode_folder_path(encoded_path)
         if not decoded_path:
-            print(f"Failed to decode download path: {encoded_path}")
             return jsonify({"error": "Invalid path"}), 404
             
-        print(f"Decoded download path: {decoded_path}")
         
         # For file downloads, we don't need to extract components or check permissions
         file_path = decoded_path
         
-        print(f"Attempting to download file: {file_path}")
         
         s3_client = get_s3_client()
         try:
@@ -324,7 +302,6 @@ def download_file(encoded_path):
                 }
             )
         except Exception as e:
-            print(f"Error downloading file: {str(e)}")
             
             try:
                 folder_path = os.path.dirname(file_path)
@@ -333,7 +310,6 @@ def download_file(encoded_path):
                 
                 filename = os.path.basename(file_path)
                 
-                print(f"Searching for file: {filename} in folder: {folder_path}")
                 
                 response = s3_client.list_objects_v2(
                     Bucket=BUCKET_NAME,
@@ -345,11 +321,9 @@ def download_file(encoded_path):
                         obj_key = obj['Key']
                         obj_name = os.path.basename(obj_key)
                         
-                        print(f"Checking object: {obj_key} (name: {obj_name})")
                         
                         # If we find a matching flename
                         if obj_name == filename or obj_key == file_path:
-                            print(f"Found matching file: {obj_key}")
                             
                             file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=obj_key)
                             file_size = file_obj['ContentLength']
@@ -367,9 +341,8 @@ def download_file(encoded_path):
                                 }
                             )
                 
-                print(f"File not found: {filename} in folder: {folder_path}")
             except Exception as search_error:
-                print(f"Error searching for file: {str(search_error)}")
+                pass  # This is a placeholder, you can add logging or other handling here
             
             return jsonify({"error": "File not found"}), 404
     except Exception as e:

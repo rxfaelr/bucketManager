@@ -1,39 +1,232 @@
-<div id="welcomeCarousel" class="welcome-overlay">
+<div id="welcomeCarousel" class="welcome-carousel">
     <div class="carousel-container">
         <div class="carousel-slides">
-            <div class="carousel-slide" data-slide="1">
-                <h2>Bem-vindo ao CEFIS Drive for Creators! 👋</h2>
+            <!-- Slide 1 -->
+            <div class="carousel-slide active">
+                <h2>Olá Editor! 👋</h2>
+                <h3>Bem-vindo ao CEFIS Drive for Creators!</h3>
                 <p>Uma maneira simples e eficiente de acessar nosso material de edição.</p>
-                <img src="https://via.placeholder.com/400x200" alt="Welcome illustration">
+                <img src="{{ url_for('static', filename='img/icone.jpg') }}" alt="CEFIS Logo" class="slide-image">
             </div>
             
-            <div class="carousel-slide" data-slide="2">
-                <h2>Navegue com Facilidade 🗂️</h2>
-                <p>Acesse e baixe os materiais de edição com uma interface intuitiva e amigável.</p>
-                <img src="https://via.placeholder.com/400x200" alt="Navigation illustration">
+            <!-- Slide 2 -->
+            <div class="carousel-slide">
+                <h2>Navegação entre Pastas</h2>
+                <p>Clique nas pastas para navegar entre os diretórios e visualizar<br>os arquivos. Use a seta para voltar.</p>
+                <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" alt="Folders" class="slide-image">
             </div>
             
-            <div class="carousel-slide" data-slide="3">
-                <h2>Download Simplificado 📥</h2>
-                <p>Baixe arquivos individuais ou pastas inteiras com apenas um clique.</p>
-                <img src="https://via.placeholder.com/400x200" alt="Download illustration">
+            <!-- Slide 3 -->
+            <div class="carousel-slide">
+                <h2>Download de Arquivos</h2>
+                <p>Clique no botão "Baixar" ao lado de cada arquivo para fazer o download<br>individualmente ou use o botão "Baixar Tudo" para baixar todos<br>os arquivos da pasta atual.</p>
+                <img src="https://cdn-icons-png.flaticon.com/512/2550/2550322.png" alt="Download" class="slide-image">
             </div>
-            <div class="carousel-slide" data-slide="4">
-                <h2>Ficou com dúvidas?</h2>
-                <p>Entre em contato conosco através do email <a href="mailto:ti@cefis.com.br">ti@cefis.com.br</a> ou pelo WhatsApp: <a href="https://wa.me/5511999999999">55 11 99999-9999</a></p>
-                <img src="https://via.placeholder.com/400x200" alt="Download illustration">
+
+            <!-- Slide 4 -->
+            <div class="carousel-slide">
+                <h2>Alguma Dúvida?</h2>
+                <p>Possui alguma dúvida? Precisa de mais dias de acesso?<br>Entre em contato conosco através do email<br>
+                    <a href="mailto:ti@cefis.com.br">ti@cefis.com.br</a>
+                </p>
+                <img src="https://cdn-icons-png.flaticon.com/512/189/189665.png" alt="Question Mark" class="slide-image">
             </div>
-            <div class="carousel-slide" data-slide="5">
-                <h2>Pronto para Começar? 🚀</h2>
-                <p>Clique no botão abaixo para começar a criar!</p>
-                <button id="startButton" class="start-button">Vamos Começar!</button>
+            
+            <!-- Slide 5 -->
+            <div class="carousel-slide">
+                <h2>Tudo Pronto!</h2>
+                <p>Agora você já sabe como usar o CEFIS Drive for Creators!<br>Vamos juntos democratizar a Educação de Qualidade para todos!</p>
+                <img src="https://cdn-icons-png.flaticon.com/512/2232/2232688.png" alt="Book" class="slide-image">
+                <button id="dismissWelcome" class="dismiss-btn">Vamos Começar!</button>
             </div>
         </div>
         
-        <div class="carousel-controls">
-            <button class="carousel-btn prev-btn">←</button>
-            <div class="carousel-dots"></div>
-            <button class="carousel-btn next-btn">→</button>
+        <div class="carousel-navigation">
+            <div class="carousel-dots">
+                <span class="dot active" onclick="currentSlide(1)"></span>
+                <span class="dot" onclick="currentSlide(2)"></span>
+                <span class="dot" onclick="currentSlide(3)"></span>
+                <span class="dot" onclick="currentSlide(4)"></span>
+                <span class="dot" onclick="currentSlide(5)"></span>
+            </div>
+            <div class="carousel-buttons">
+                <button class="carousel-btn prev" onclick="changeSlide(-1)">❮ Anterior</button>
+                <button class="carousel-btn next" onclick="changeSlide(1)">Próximo ❯</button>
+            </div>
         </div>
     </div>
-</div> 
+</div>
+
+<style>
+.welcome-carousel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.carousel-container {
+    background-color: white;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    padding: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.carousel-slides {
+    position: relative;
+    min-height: 400px;
+}
+
+.carousel-slide {
+    display: none;
+    text-align: center;
+    padding: 20px;
+}
+
+.carousel-slide.active {
+    display: block;
+}
+
+.slide-image {
+    max-width: 200px;
+    max-height: 200px;
+    margin: 20px auto;
+    display: block;
+}
+
+.carousel-navigation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.carousel-dots {
+    margin-bottom: 15px;
+}
+
+.dot {
+    height: 12px;
+    width: 12px;
+    margin: 0 5px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.dot.active {
+    background-color: #0000FF;
+}
+
+.carousel-buttons {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.carousel-btn {
+    background-color: #0000FF;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.carousel-btn:hover {
+    background-color: #0000FF;
+}
+
+.dismiss-btn {
+    background-color: #0000FF;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-top: 20px;
+    transition: background-color 0.3s;
+}
+
+.dismiss-btn:hover {
+    background-color: #0000FF;
+}
+</style>
+
+<script>
+let currentSlideIndex = 1;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const welcomeDismissed = localStorage.getItem('welcomeDismissed');
+    if (welcomeDismissed === 'true') {
+        document.getElementById('welcomeCarousel').style.display = 'none';
+    }
+    
+    document.getElementById('dismissWelcome').addEventListener('click', function() {
+        localStorage.setItem('welcomeDismissed', 'true');
+        document.getElementById('welcomeCarousel').style.display = 'none';
+    });
+});
+
+function changeSlide(n) {
+    showSlide(currentSlideIndex += n);
+}
+
+function currentSlide(n) {
+    showSlide(currentSlideIndex = n);
+}
+
+function showSlide(n) {
+    let i;
+    const slides = document.getElementsByClassName("carousel-slide");
+    const dots = document.getElementsByClassName("dot");
+    const dotsContainer = document.querySelector('.carousel-dots');
+    
+    if (n > slides.length) {currentSlideIndex = 1}
+    if (n < 1) {currentSlideIndex = slides.length}
+    
+    for (i = 0; i < slides.length; i++) {
+        slides[i].classList.remove("active");
+    }
+    
+    for (i = 0; i < dots.length; i++) {
+        dots[i].classList.remove("active");
+    }
+    
+    slides[currentSlideIndex-1].classList.add("active");
+    dots[currentSlideIndex-1].classList.add("active");
+    
+    const prevBtn = document.querySelector('.carousel-btn.prev');
+    const nextBtn = document.querySelector('.carousel-btn.next');
+    
+    if (currentSlideIndex === 1) {
+        prevBtn.style.visibility = 'hidden';
+    } else {
+        prevBtn.style.visibility = 'visible';
+    }
+    
+    if (currentSlideIndex === slides.length) {
+        nextBtn.style.visibility = 'hidden';
+        dotsContainer.style.display = 'none';
+    } else {
+        nextBtn.style.visibility = 'visible';
+        dotsContainer.style.display = 'block';
+    }
+}
+
+// Initialize the carousel
+showSlide(currentSlideIndex);
+</script> 

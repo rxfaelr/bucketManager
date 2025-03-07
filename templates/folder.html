@@ -371,6 +371,32 @@
         .start-button:hover {
             background: #218838;
         }
+        
+        /* Floating help button styles */
+        .help-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #0000FF;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            border: none;
+            z-index: 100;
+            transition: transform 0.3s, background-color 0.3s;
+        }
+        
+        .help-button:hover {
+            transform: scale(1.1);
+            background-color: #0000DD;
+        }
     </style>
 </head>
 <body>
@@ -449,7 +475,11 @@
         {% endif %}
     </div>
 
+    <button class="help-button" onclick="showWelcomeAgain()">?</button>
+
     <div id="downloadProgress" class="progress-text"></div>
+    
+    {% include 'welcome.html' %}
 
     <script>
     async function encodeFolder(folder) {
@@ -479,7 +509,6 @@
             progressText.style.display = 'block';
             progressText.textContent = 'Preparando download...';
             
-            // Get the current folder path from the URL
             const cleanPath = '{{ folder_path }}';
             
             const response = await fetch('/batch-download', {
@@ -545,6 +574,29 @@
             setTimeout(() => {
                 progressText.style.display = 'none';
             }, 3000);
+        }
+    }
+    
+    function showWelcomeAgain() {
+        const carousel = document.getElementById('welcomeCarousel');
+        if (carousel) {
+            carousel.style.display = 'flex';
+            
+            const slides = document.querySelectorAll('.carousel-slide');
+            const dots = document.querySelectorAll('.dot');
+            
+            if (slides.length > 0 && dots.length > 0) {
+                slides.forEach(slide => slide.classList.remove('active'));
+                dots.forEach(dot => dot.classList.remove('active'));
+                
+                slides[0].classList.add('active');
+                dots[0].classList.add('active');
+            }
+            
+            // Reset the localStorage flag
+            localStorage.removeItem('welcomeDismissed');
+        } else {
+            window.location.reload();
         }
     }
     </script>
