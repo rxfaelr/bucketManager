@@ -124,12 +124,12 @@ def decode_folder_path(encrypted_url):
 def extract_url_components(decoded_data):
     try:
         if not decoded_data:
-            return None, None
+            return None, None, None
             
         parts = decoded_data.split('-', 1)
         
         folder_name = parts[0] if len(parts) > 0 else None
-        course_id = folder_name 
+        course_id = folder_name  # They are the same
         user_id = parts[1] if len(parts) > 1 else None
         
         return folder_name, course_id, user_id
@@ -198,111 +198,94 @@ def folder_view(encoded_path):
         print(f"Error in folder_view: {str(e)}")
         return render_template('error.html')
 
-def handle_folder_view(folder, encoded_main_folder, course_id=None, user_id=None):
-    folder_path = f"{folder}/" if not folder.endswith('/') else folder
-    page = request.args.get('page', 1, type=int)
-    per_page = 100
-    
+def handle_folder_view(folder_path, encoded_main_folder=None, course_id=None, user_id=None):
     try:
         s3_client = get_s3_client()
+        
+        folder_prefix = folder_path + '/' if not folder_path.endswith('/') else folder_path
+        
         response = s3_client.list_objects_v2(
             Bucket=BUCKET_NAME,
-            Prefix=folder_path
-        )
-        
-        subdirectories = set()
-        files = []
-        brazil_tz = pytz.timezone('America/Sao_Paulo')
-        
-        if 'Contents' in response:
-            for obj in response['Contents']:
-                key = obj['Key']
-                
-                if key == folder_path:
-                    continue
-                
-                relative_path = key[len(folder_path):]
-                if not relative_path:
-                    continue
-                
-                parts = relative_path.rstrip('/').split('/')
-                
-                if len(parts) > 1:
-                    subdirectories.add(parts[0])
-                else:
-                    utc_time = obj['LastModified']
-                    local_time = utc_time.astimezone(brazil_tz)
-                    
-                    files.append({
-                        'name': parts[0],
-                        'key': key,
-                        'size': format_size(obj['Size']),
-                        'last_modified': local_time.strftime('%d/%m/%Y %H:%M:%S')
-                    })
-        
-        dir_response = s3_client.list_objects_v2(
-            Bucket=BUCKET_NAME,
-            Prefix=folder_path,
+            Prefix=folder_prefix,
             Delimiter='/'
         )
         
-        for prefix in dir_response.get('CommonPrefixes', []):
+        folders = []
+        files = []
+        
+        for prefix in response.get('CommonPrefixes', []):
             prefix_path = prefix.get('Prefix', '')
-            if prefix_path != folder_path:
-                dir_name = prefix_path[len(folder_path):].rstrip('/')
-                if dir_name:
-                    subdirectories.add(dir_name)
-        
-       
-        parts = folder_path.split('/')
-        subdirs_list = [
-            {
-                'name': subdir,
-                'path': encode_folder_path(f"{folder_path}{subdir}"),
-            }
-            for subdir in subdirectories
-        ]
-        
-        subdirs_list.sort(key=lambda x: x['name'].lower())
-        files.sort(key=lambda x: x['name'].lower())
-        
-       
-        breadcrumb_paths = []
-        current_path = ''
-        for part in parts[:-1]:  
-            if current_path:
-                current_path += f"/{part}"
-            else:
-                current_path = part
-            breadcrumb_paths.append({
-                'name': part,
-                'encoded_path': encode_folder_path(current_path)
+            folder_name = prefix_path.rstrip('/').split('/')[-1]
+            
+            encoded_path = encode_folder_path(prefix_path.rstrip('/'))
+            
+            folders.append({
+                'name': folder_name,
+                'path': prefix_path,
+                'encoded_path': encoded_path
             })
         
-        total_files = len(files)
-        total_pages = (total_files + per_page - 1) // per_page
-        page = min(max(1, page), total_pages) if total_pages > 0 else 1
-        
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated_files = files[start_idx:end_idx]
-
-        if subdirs_list or files or folder_path == '':
-            return render_template('folder.html',
-                                folder_name=folder,
-                                current_path=folder_path,
-                                subdirectories=subdirs_list,
-                                files=paginated_files,
-                                breadcrumb_paths=breadcrumb_paths,
-                                current_page=page,
-                                total_pages=total_pages,
-                                total_files=total_files,
-                                course_id=course_id,
-                                user_id=user_id)
-        else:
-            return render_template('error.html')
+        for obj in response.get('Contents', []):
+            key = obj.get('Key', '')
             
+            if key == folder_prefix:
+                continue
+                
+            if '/' in key[len(folder_prefix):]:
+                continue
+                
+            file_name = key.split('/')[-1]
+            size = format_size(obj.get('Size', 0))
+            last_modified = obj.get('LastModified', datetime.now(pytz.UTC))
+            
+            if isinstance(last_modified, datetime):
+                last_modified = last_modified.strftime('%d/%m/%Y %H:%M')
+                
+            encoded_path = encode_folder_path(key)
+            
+            files.append({
+                'name': file_name,
+                'key': key,
+                'size': size,
+                'last_modified': last_modified,
+                'encoded_path': encoded_path
+            })
+        
+        folders.sort(key=lambda x: x['name'].lower())
+        files.sort(key=lambda x: x['name'].lower())
+        
+        breadcrumbs = []
+        path_parts = folder_path.split('/')
+        current_path = ""
+        
+        for i, part in enumerate(path_parts):
+            if not part:
+                continue
+                
+            if current_path:
+                current_path += "/"
+            current_path += part
+            
+            encoded_path = encode_folder_path(current_path)
+            
+            breadcrumbs.append({
+                'name': part,
+                'path': current_path,
+                'encoded_path': encoded_path,
+                'is_last': i == len(path_parts) - 1
+            })
+        
+        return render_template('folder.html', 
+                              folders=folders, 
+                              files=files, 
+                              breadcrumbs=breadcrumbs,
+                              folder_path=folder_path,
+                              encoded_main_folder=encoded_main_folder,
+                              course_id=course_id,
+                              user_id=user_id)
+                              
     except Exception as e:
+        print(f"Error handling folder view: {str(e)}")
         return render_template('error.html')
 
 @app.route('/download/<encoded_path>')
@@ -316,30 +299,8 @@ def download_file(encoded_path):
             
         print(f"Decoded download path: {decoded_path}")
         
-
-        
-        if '-' in decoded_path:
-            parts = decoded_path.split('-', 1)
-            if len(parts) == 2:
-                potential_folder = parts[0]
-                potential_user_id = parts[1]
-                
-                if potential_user_id.isdigit() or (potential_user_id and not '/' in potential_user_id):
-                    folder_name, course_id, user_id = extract_url_components(decoded_path)
-                    
-                    if course_id and user_id:
-                        has_permission = check_editor_permission(course_id, user_id)
-                        if not has_permission:
-                            print(f"Download access denied for user {user_id} to course {course_id}")
-                            return jsonify({"error": "No permission to download this file"}), 403
-                    
-                    file_path = folder_name
-                else:
-                    file_path = decoded_path
-            else:
-                file_path = decoded_path
-        else:
-            file_path = decoded_path
+        # For file downloads, we don't need to extract components or check permissions
+        file_path = decoded_path
         
         print(f"Attempting to download file: {file_path}")
         
@@ -617,12 +578,11 @@ def encode_folder():
         data = request.get_json()
         folder = data.get('folder')
         user_id = data.get('userId', '')
-        custom_iv = data.get('iv')  # Optional custom IV
+        custom_iv = data.get('iv') 
         
         if not folder:
             return jsonify({'error': 'No folder provided'}), 400
         
-        # Now folder and course_id are the same
         folder_data = f"{folder}-{user_id}"
         
         encoded = encode_folder_path(folder_data, custom_iv)
@@ -672,11 +632,7 @@ def batch_download():
         if not folder:
             return jsonify({'error': 'No folder provided'}), 400
             
-        if folder and user_id:
-            has_permission = check_editor_permission(folder, user_id)
-            if not has_permission:
-                print(f"Batch download access denied for user {user_id} to course {folder}")
-                return jsonify({'error': 'No permission to download these files'}), 403
+
         
         folder_name = folder
         
@@ -701,7 +657,8 @@ def batch_download():
             if obj_key == folder_prefix:
                 continue
 
-            encoded_path = encode_folder_path(f"{obj_key}-{user_id}")
+
+            encoded_path = encode_folder_path(obj_key)
             
             test_decode = decode_folder_path(encoded_path)
             print(f"File: {obj_key}, Encoded: {encoded_path[:20]}..., Decoded: {test_decode[:30]}...")

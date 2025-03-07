@@ -376,10 +376,10 @@
 <body>
     <div class="container">
         <div class="navigation">
-            {% if '/' in current_path.strip('/') %}
-                {% set parts = current_path.strip('/').split('/') %}
-                {% set parent_index = breadcrumb_paths|length - 1 %}
-                <a href="/{{ breadcrumb_paths[parent_index - 1].encoded_path if parent_index > 0 else '' }}" class="back-arrow">
+            {% if '/' in folder_path.strip('/') %}
+                {% set parts = folder_path.strip('/').split('/') %}
+                {% set parent_index = breadcrumbs|length - 1 %}
+                <a href="/{{ breadcrumbs[parent_index - 1].encoded_path if parent_index > 0 else '' }}" class="back-arrow">
                     ←
                 </a>
                 <span class="current-folder">{{ parts[-1] }}</span>
@@ -390,28 +390,28 @@
 
         <div class="page-header">
             <h1 class="page-title">
-                {% if '/' in current_path.strip('/') %}
-                    Arquivos em /{{ current_path.strip('/').split('/')[-1] }}
+                {% if '/' in folder_path.strip('/') %}
+                    Arquivos em /{{ folder_path.strip('/').split('/')[-1] }}
                 {% else %}
                     Arquivos
                 {% endif %}
             </h1>
-            {% if '/' in current_path.strip('/') or (files and not subdirectories) %}
-            <a href="#" onclick="downloadFolder('{{ current_path }}'); return false;" class="download-all-btn">
+            {% if '/' in folder_path.strip('/') or (files and not folders) %}
+            <a href="#" onclick="downloadAllFiles(); return false;" class="download-all-btn">
                 📥 Baixar Tudo
             </a>
             {% endif %}
         </div>
         
-        {% if subdirectories %}
+        {% if folders %}
         <div class="section">
             <div class="section-title">📁 Subdiretórios</div>
             <ul class="list">
-                {% for subdir in subdirectories %}
+                {% for folder in folders %}
                 <li class="list-item">
                     <div class="item-info">
-                        <a href="/{{ subdir.path }}" class="folder-link">
-                            <div class="item-name">{{ subdir.name }}/</div>
+                        <a href="/{{ folder.encoded_path }}" class="folder-link">
+                            <div class="item-name">{{ folder.name }}/</div>
                         </a>
                     </div>
                 </li>
@@ -423,55 +423,33 @@
         {% if files %}
         <div class="section">
             <div class="section-title">
-                📄 Arquivos <span class="files-count">(Total: {{ total_files }})</span>
+                📄 Arquivos <span class="files-count">(Total: {{ files|length }})</span>
             </div>
             <ul class="list">
                 {% for file in files %}
                 <li class="list-item">
-                    <div class="item-number">{{ (current_page - 1) * 100 + loop.index }}.</div>
+                    <div class="item-number">{{ loop.index }}.</div>
                     <div class="item-info">
                         <div class="item-name">{{ file.name }}</div>
                         <div class="item-metadata">
                             Tamanho: {{ file.size }} | Data: {{ file.last_modified }}
                         </div>
                     </div>
-                    <a href="/download/{{ file.key|aesencrypt }}" class="download-btn">
+                    <a href="/download/{{ file.encoded_path }}" class="download-btn">
                         Baixar
                     </a>
                 </li>
                 {% endfor %}
             </ul>
-
-            {% if total_pages > 1 %}
-            <div class="pagination">
-                {% if current_page > 1 %}
-                <a href="?page={{ current_page - 1 }}" class="page-btn">← Anterior</a>
-                {% endif %}
-                
-                <span class="page-info">Página {{ current_page }} de {{ total_pages }}</span>
-                
-                {% if current_page < total_pages %}
-                <a href="?page={{ current_page + 1 }}" class="page-btn">Próxima →</a>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
         {% endif %}
         
-        {% if not subdirectories and not files %}
+        {% if not folders and not files %}
         <p>Esta pasta está vazia.</p>
         {% endif %}
-
-        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <button onclick="showWelcomeAgain()" class="download-btn" style="background-color: #6c757d;">
-                Mostrar Guia de Boas-vindas
-            </button>
-        </div>
     </div>
 
     <div id="downloadProgress" class="progress-text"></div>
-    
-    {% include 'welcome.html' %}
 
     <script>
     async function encodeFolder(folder) {
@@ -495,23 +473,22 @@
         }
     }
 
-    async function downloadFolder(folderPath) {
+    async function downloadAllFiles() {
         try {
             const progressText = document.getElementById('downloadProgress');
             progressText.style.display = 'block';
+            progressText.textContent = 'Preparando download...';
             
-            const cleanPath = folderPath.endsWith('/') ? folderPath.slice(0, -1) : folderPath;
-            
-            console.log("Starting batch download for folder:", cleanPath);
+            // Get the current folder path from the URL
+            const cleanPath = '{{ folder_path }}';
             
             const response = await fetch('/batch-download', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     folder: cleanPath,
-                    courseId: '{{ course_id }}',
                     userId: '{{ user_id }}'
                 })
             });
@@ -568,85 +545,6 @@
             setTimeout(() => {
                 progressText.style.display = 'none';
             }, 3000);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        if (localStorage.getItem('welcomeSeen')) {
-            document.getElementById('welcomeCarousel').style.display = 'none';
-            return;
-        }
-        
-        const carousel = document.getElementById('welcomeCarousel');
-        const slides = document.querySelectorAll('.carousel-slide');
-        const prevBtn = document.querySelector('.prev-btn');
-        const nextBtn = document.querySelector('.next-btn');
-        const dotsContainer = document.querySelector('.carousel-dots');
-        let currentSlide = 0;
-        
-        slides.forEach((_, index) => {
-            const dot = document.createElement('div');
-            dot.classList.add('dot');
-            dot.addEventListener('click', () => goToSlide(index));
-            dotsContainer.appendChild(dot);
-        });
-        
-        const dots = document.querySelectorAll('.dot');
-        
-        function updateSlides() {
-            slides.forEach(slide => slide.classList.remove('active'));
-            dots.forEach(dot => dot.classList.remove('active'));
-            
-            slides[currentSlide].classList.add('active');
-            dots[currentSlide].classList.add('active');
-            
-            prevBtn.style.visibility = currentSlide === 0 ? 'hidden' : 'visible';
-            nextBtn.style.visibility = currentSlide === slides.length - 1 ? 'hidden' : 'visible';
-        }
-        
-        function goToSlide(index) {
-            currentSlide = index;
-            updateSlides();
-        }
-        
-        prevBtn.addEventListener('click', () => {
-            if (currentSlide > 0) {
-                goToSlide(currentSlide - 1);
-            }
-        });
-        
-        nextBtn.addEventListener('click', () => {
-            if (currentSlide < slides.length - 1) {
-                goToSlide(currentSlide + 1);
-            }
-        });
-        
-        document.getElementById('startButton').addEventListener('click', () => {
-            localStorage.setItem('welcomeSeen', 'true');
-            carousel.style.display = 'none';
-        });
-        
-        updateSlides();
-    });
-
-    function showWelcomeAgain() {
-        localStorage.removeItem('welcomeSeen');
-        const carousel = document.getElementById('welcomeCarousel');
-        if (carousel) {
-            carousel.style.display = 'flex';
-            
-            const slides = document.querySelectorAll('.carousel-slide');
-            const dots = document.querySelectorAll('.dot');
-            
-            if (slides.length > 0 && dots.length > 0) {
-                slides.forEach(slide => slide.classList.remove('active'));
-                dots.forEach(dot => dot.classList.remove('active'));
-                
-                slides[0].classList.add('active');
-                dots[0].classList.add('active');
-            }
-        } else {
-            window.location.reload();
         }
     }
     </script>
