@@ -653,7 +653,7 @@ def check_editor_permission(course_id, user_id):
             print(f"Missing course_id or user_id for permission check: {course_id}, {user_id}")
             return False
             
-        # Make a request to the permission API
+        #request to the permission API
         url = f"https://api-v3.cefis.com.br/course-video-editing/check-editor-permission"
         params = {
             "courseId": course_id,
