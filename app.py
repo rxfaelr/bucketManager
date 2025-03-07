@@ -11,6 +11,7 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 import binascii
 import requests
+import hashlib
 
 # Load environment variables
 load_dotenv()
@@ -41,34 +42,65 @@ def format_size(size):
     else:
         return f"{size/(1024*1024*1024):.1f} GB"
 
-def encode_folder_path(folder_data):
+def encode_folder_path(folder_data, custom_iv=None):
     try:
-        key = os.getenv('ENCRYPTION_KEY').encode('utf-8')
-        iv = os.getenv('ENCRYPTION_IV').encode('utf-8')
+        original_key = os.getenv('ENCRYPTION_KEY')
         
+        key = hashlib.sha256(original_key.encode('utf-8')).digest()
+        
+        if custom_iv:
+            iv = binascii.unhexlify(custom_iv)
+        else:
+            from Crypto.Random import get_random_bytes
+            iv = get_random_bytes(16)
+            
+        mode = "AES-256"
+            
         data_bytes = folder_data.encode('utf-8')
         
-
-        remainder = len(data_bytes) % AES.block_size
-        if remainder != 0:
-            data_bytes += b' ' * (AES.block_size - remainder)
-        
         cipher = AES.new(key, AES.MODE_CBC, iv)
+        padded_data = pad(data_bytes, AES.block_size)
         
-        encrypted_data = cipher.encrypt(data_bytes)
+        encrypted_data = cipher.encrypt(padded_data)
         
-        return binascii.hexlify(encrypted_data).decode('utf-8')
+        iv_hex = binascii.hexlify(iv).decode('utf-8')
+        encrypted_hex = binascii.hexlify(encrypted_data).decode('utf-8')
+        
+        return f"{iv_hex}.{encrypted_hex}"
     except Exception as e:
         print(f"Encryption error: {str(e)}")
         return None
 
-def decode_folder_path(encrypted_hex):
+def decode_folder_path(encrypted_url):
     try:
-        key = os.getenv('ENCRYPTION_KEY').encode('utf-8')
-        iv = os.getenv('ENCRYPTION_IV').encode('utf-8')
+        parts = encrypted_url.split('.', 1)
+        if len(parts) != 2:
+            print(f"Invalid URL format: {encrypted_url}")
+            return None
+            
+        iv_hex, encrypted_hex = parts
         
+        original_key = os.getenv('ENCRYPTION_KEY')
+        
+        key = hashlib.sha256(original_key.encode('utf-8')).digest()
+        
+        try:
+            iv = binascii.unhexlify(iv_hex)
+            if len(iv) != 16:
+                print(f"Invalid IV length: {len(iv)} bytes. Must be 16 bytes (32 hex characters).")
+                return None
+        except binascii.Error as e:
+            print(f"Invalid IV format: {str(e)}")
+            return None
+            
+        print(f"Original key: {original_key}")
+        print(f"SHA-256 key (hex): {binascii.hexlify(key).decode('utf-8')}")
+        print(f"SHA-256 key length: {len(key)} bytes")
+        print(f"IV (hex): {iv_hex}")
+        print(f"IV length: {len(iv)} bytes")
+
         if not encrypted_hex or len(encrypted_hex) % 2 != 0:
-            print(f"Invalid hex string: {encrypted_hex}")
+            print(f"Invalid encrypted hex string: {encrypted_hex}")
             return None
             
         encrypted_data = binascii.unhexlify(encrypted_hex)
@@ -77,7 +109,13 @@ def decode_folder_path(encrypted_hex):
         
         decrypted_data = cipher.decrypt(encrypted_data)
         
-        result = decrypted_data.decode('utf-8').rstrip()
+        try:
+            unpadded_data = unpad(decrypted_data, AES.block_size)
+            result = unpadded_data.decode('utf-8')
+        except Exception as padding_error:
+            print(f"Unpadding error, trying legacy method: {str(padding_error)}")
+            result = decrypted_data.decode('utf-8').rstrip()
+            
         return result
     except Exception as e:
         print(f"Decryption error: {str(e)}")
@@ -86,13 +124,13 @@ def decode_folder_path(encrypted_hex):
 def extract_url_components(decoded_data):
     try:
         if not decoded_data:
-            return None, None, None
+            return None, None
             
-        parts = decoded_data.split('-', 2)
+        parts = decoded_data.split('-', 1)
         
         folder_name = parts[0] if len(parts) > 0 else None
-        course_id = parts[1] if len(parts) > 1 else None
-        user_id = parts[2] if len(parts) > 2 else None
+        course_id = folder_name 
+        user_id = parts[1] if len(parts) > 1 else None
         
         return folder_name, course_id, user_id
     except Exception as e:
@@ -105,7 +143,11 @@ def b64encode_filter(s):
 
 @app.template_filter('aesencrypt')
 def aesencrypt_filter(s):
-    return encode_folder_path(s)
+    if '/' in s:
+        return encode_folder_path(s)
+    else:
+
+        return encode_folder_path(s)
 
 @app.route('/')
 def index():
@@ -128,7 +170,7 @@ def folder_view(encoded_path):
             print(f"Failed to extract folder name from: {decoded_data}")
             return render_template('error.html')
             
-        print(f"Decoded components - Folder: {folder_name}, Course ID: {course_id}, User ID: {user_id}")
+        print(f"Decoded components - Folder/Course ID: {folder_name}, User ID: {user_id}")
         
         if course_id and user_id:
             has_permission = check_editor_permission(course_id, user_id)
@@ -274,33 +316,35 @@ def download_file(encoded_path):
             
         print(f"Decoded download path: {decoded_path}")
         
-  
-        folder_name, course_id, user_id = extract_url_components(decoded_path)
+
         
-
-        parts = decoded_path.split('-')
-        if len(parts) >= 3:
-
-            course_id = parts[-2] if len(parts) > 1 else None
-            user_id = parts[-1] if len(parts) > 2 else None
-            
-            if course_id and user_id and course_id != "None" and user_id != "None":
-                has_permission = check_editor_permission(course_id, user_id)
-                if not has_permission:
-                    print(f"Download access denied for user {user_id} to course {course_id}")
-                    return jsonify({"error": "No permission to download this file"}), 403
-            
-            if (course_id == "None" and user_id == "None") or (course_id and user_id):
-                file_path = '-'.join(parts[:-2])
-                print(f"Removed course/user suffix. File path: {file_path}")
+        if '-' in decoded_path:
+            parts = decoded_path.split('-', 1)
+            if len(parts) == 2:
+                potential_folder = parts[0]
+                potential_user_id = parts[1]
+                
+                if potential_user_id.isdigit() or (potential_user_id and not '/' in potential_user_id):
+                    folder_name, course_id, user_id = extract_url_components(decoded_path)
+                    
+                    if course_id and user_id:
+                        has_permission = check_editor_permission(course_id, user_id)
+                        if not has_permission:
+                            print(f"Download access denied for user {user_id} to course {course_id}")
+                            return jsonify({"error": "No permission to download this file"}), 403
+                    
+                    file_path = folder_name
+                else:
+                    file_path = decoded_path
             else:
                 file_path = decoded_path
         else:
             file_path = decoded_path
         
+        print(f"Attempting to download file: {file_path}")
+        
         s3_client = get_s3_client()
         try:
-            print(f"Attempting to download file: {file_path}")
             response = s3_client.head_object(Bucket=BUCKET_NAME, Key=file_path)
             file_size = response['ContentLength']
             
@@ -572,15 +616,16 @@ def encode_folder():
     try:
         data = request.get_json()
         folder = data.get('folder')
-        course_id = data.get('courseId', '')
         user_id = data.get('userId', '')
+        custom_iv = data.get('iv')  # Optional custom IV
         
         if not folder:
             return jsonify({'error': 'No folder provided'}), 400
         
-        folder_data = f"{folder}-{course_id}-{user_id}"
+        # Now folder and course_id are the same
+        folder_data = f"{folder}-{user_id}"
         
-        encoded = encode_folder_path(folder_data)
+        encoded = encode_folder_path(folder_data, custom_iv)
         if encoded is None:
             return jsonify({'error': 'Encoding failed'}), 500
             
@@ -591,13 +636,12 @@ def encode_folder():
 @app.route('/generate_test_url')
 def generate_test_url():
     folder = request.args.get('folder', '')
-    course_id = request.args.get('course_id', '')
     user_id = request.args.get('user_id', '')
     
     if not folder:
         return jsonify({"error": "Folder name is required"}), 400
         
-    folder_data = f"{folder}-{course_id}-{user_id}"
+    folder_data = f"{folder}-{user_id}"
     
     encoded = encode_folder_path(folder_data)
     if encoded is None:
@@ -608,7 +652,7 @@ def generate_test_url():
     
     return jsonify({
         "folder": folder,
-        "course_id": course_id,
+        "course_id": folder,
         "user_id": user_id,
         "encoded": encoded,
         "url": full_url
@@ -623,26 +667,20 @@ def batch_download():
     try:
         data = request.get_json()
         folder = data.get('folder')
-        course_id = data.get('courseId', '')
         user_id = data.get('userId', '')
         
         if not folder:
             return jsonify({'error': 'No folder provided'}), 400
             
-        if course_id and user_id and course_id != 'None' and user_id != 'None':
-            has_permission = check_editor_permission(course_id, user_id)
+        if folder and user_id:
+            has_permission = check_editor_permission(folder, user_id)
             if not has_permission:
-                print(f"Batch download access denied for user {user_id} to course {course_id}")
+                print(f"Batch download access denied for user {user_id} to course {folder}")
                 return jsonify({'error': 'No permission to download these files'}), 403
-            
-        folder_name = folder
-        if course_id and user_id:
-            suffix = f"-{course_id}-{user_id}"
-            if folder.endswith(suffix):
-                folder_name = folder[:-len(suffix)]
-                print(f"Removed course/user suffix. Folder name: {folder_name}")
         
-        print(f"Batch download for folder: {folder_name}, courseId: {course_id}, userId: {user_id}")
+        folder_name = folder
+        
+        print(f"Batch download for folder: {folder_name}, userId: {user_id}")
         
         s3_client = get_s3_client()
         
@@ -663,7 +701,7 @@ def batch_download():
             if obj_key == folder_prefix:
                 continue
 
-            encoded_path = encode_folder_path(f"{obj_key}-{course_id}-{user_id}")
+            encoded_path = encode_folder_path(f"{obj_key}-{user_id}")
             
             test_decode = decode_folder_path(encoded_path)
             print(f"File: {obj_key}, Encoded: {encoded_path[:20]}..., Decoded: {test_decode[:30]}...")
