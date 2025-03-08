@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Admin - Bucket Manager</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            margin: 0;
+            color: #333;
+        }
+        
+        .logout-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        
+        .logout-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .folder-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .folder-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        
+        .folder-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .folder-item:last-child {
+            border-bottom: none;
+        }
+        
+        .folder-name {
+            font-weight: bold;
+            color: #0000FF;
+            text-decoration: none;
+        }
+        
+        .folder-name:hover {
+            text-decoration: underline;
+        }
+        
+        .folder-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .view-btn {
+            background-color: #0000FF;
+            color: white;
+        }
+        
+        .view-btn:hover {
+            background-color: #0000DD;
+        }
+        
+        .download-btn {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .download-btn:hover {
+            background-color: #218838;
+        }
+        
+        .search-container {
+            margin-bottom: 20px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+        
+        .no-folders {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Painel Admin</h1>
+            <a href="{{ url_for('admin_logout') }}" class="logout-btn">Logout</a>
+        </header>
+        
+        <div class="card">
+            <h2 class="card-title">Todas as Pastas</h2>
+            
+            <div class="search-container">
+                <input type="text" id="searchInput" class="search-input" placeholder="Pesquisar pastas...">
+            </div>
+            
+            <div id="folderContainer">
+                <div class="loading">Carregando pastas...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchFolders();
+            
+            const searchInput = document.getElementById('searchInput');
+            searchInput.addEventListener('input', function() {
+                filterFolders(this.value);
+            });
+        });
+        
+        async function fetchFolders() {
+            try {
+                const response = await fetch('/admin/api/folders');
+                const data = await response.json();
+                
+                renderFolders(data);
+            } catch (error) {
+                console.error('Error fetching folders:', error);
+                document.getElementById('folderContainer').innerHTML = `
+                    <div class="no-folders">Error loading folders. Please try again.</div>
+                `;
+            }
+        }
+        
+        function renderFolders(folders) {
+            const container = document.getElementById('folderContainer');
+            
+            if (!folders || folders.length === 0) {
+                container.innerHTML = `
+                    <div class="no-folders">No folders found in the bucket.</div>
+                `;
+                return;
+            }
+            
+            let html = `<ul class="folder-list">`;
+            
+            folders.forEach(folder => {
+                html += `
+                    <li class="folder-item" data-folder-name="${folder.name.toLowerCase()}">
+                        <span>${folder.name}</span>
+                        <div class="folder-actions">
+                            <a href="/admin/view/${folder.encoded}" class="action-btn view-btn">View</a>
+                            <a href="/admin/download/${folder.encoded}" class="action-btn download-btn">Download</a>
+                        </div>
+                    </li>
+                `;
+            });
+            
+            html += `</ul>`;
+            container.innerHTML = html;
+        }
+        
+        function filterFolders(searchTerm) {
+            const folderItems = document.querySelectorAll('.folder-item');
+            const lowerSearchTerm = searchTerm.toLowerCase();
+            
+            folderItems.forEach(item => {
+                const folderName = item.getAttribute('data-folder-name');
+                if (folderName.includes(lowerSearchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html> 

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template, redirect, url_for
+from flask import Flask, request, jsonify, send_file, render_template, redirect, url_for, session
 import boto3
 import os
 import zipfile
@@ -12,17 +12,42 @@ from Crypto.Util.Padding import pad, unpad
 import binascii
 import requests
 import hashlib
+import functools
+from flask_wtf.csrf import CSRFProtect
+import pyotp
+import logging
+import qrcode
+import io
+import time
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'default_secret_key')
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600
+
+# Admin credentials
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
+PASSWORD_SALT = os.getenv('PASSWORD_SALT')
 
 # S3 credentials from environment variables
 S3_ENDPOINT = os.getenv('S3_ENDPOINT')
 S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY')
 S3_SECRET_KEY = os.getenv('S3_SECRET_KEY')
 BUCKET_NAME = os.getenv('BUCKET_NAME')
+
+csrf = CSRFProtect(app)
+
+logging.basicConfig(
+    filename='admin_access.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 def get_s3_client():
     return boto3.client(
@@ -696,6 +721,316 @@ def test_encryption():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def admin_required(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'admin_logged_in' not in session or not session['admin_logged_in']:
+            return redirect(url_for('admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@app.route('/admin')
+def admin_redirect():
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    error = None
+    
+    if request.method == 'POST':
+        auth_token = request.form.get('auth_token', '')
+        
+        if not auth_token or ':' not in auth_token:
+            error = 'Invalid authentication'
+            logging.warning(f"Invalid auth token format from IP: {request.remote_addr}")
+            return render_template('admin_login.html', error=error)
+            
+        token_parts = auth_token.split(':', 1)
+        if len(token_parts) != 2:
+            error = 'Invalid authentication'
+            logging.warning(f"Invalid auth token format from IP: {request.remote_addr}")
+            return render_template('admin_login.html', error=error)
+            
+        received_hash, timestamp = token_parts
+        
+        try:
+            timestamp_int = int(timestamp)
+            current_time = int(time.time() * 1000)  # Current time in milliseconds
+            if current_time - timestamp_int > 300000:  # 5 minutes in milliseconds
+                error = 'Authentication expired'
+                logging.warning(f"Expired auth attempt from IP: {request.remote_addr}")
+                return render_template('admin_login.html', error=error)
+        except ValueError:
+            error = 'Invalid authentication'
+            logging.warning(f"Invalid timestamp in auth token from IP: {request.remote_addr}")
+            return render_template('admin_login.html', error=error)
+        
+        expected_string = ADMIN_USERNAME + ":" + ADMIN_PASSWORD + ":" + timestamp
+        expected_hash = hashlib.sha256(expected_string.encode()).hexdigest()
+        
+        if received_hash == expected_hash:
+            session['admin_logged_in'] = True
+            logging.info(f"Successful login for user: {ADMIN_USERNAME} from IP: {request.remote_addr}")
+            return redirect(url_for('admin_dashboard'))
+        else:
+            error = 'Invalid username or password'
+            logging.warning(f"Failed login attempt from IP: {request.remote_addr}")
+    
+    return render_template('admin_login.html', error=error)
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_logged_in', None)
+    return redirect(url_for('admin_login'))
+
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard():
+    return render_template('admin_dashboard.html')
+
+@app.route('/admin/api/folders')
+@admin_required
+def admin_api_folders():
+    try:
+        s3_client = get_s3_client()
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Delimiter='/'
+        )
+        
+        folders = []
+        for prefix in response.get('CommonPrefixes', []):
+            prefix_path = prefix.get('Prefix', '')
+            folder_name = prefix_path.rstrip('/')
+            
+            encoded_path = encode_folder_path(folder_name)
+            
+            folders.append({
+                'name': folder_name,
+                'path': prefix_path,
+                'encoded': encoded_path
+            })
+        
+        folders.sort(key=lambda x: x['name'].lower())
+        return jsonify(folders)
+        
+    except Exception as e:
+        print(f"Error listing folders: {str(e)}")
+        return jsonify([])
+
+@app.route('/admin/view/<path:encoded_path>')
+@admin_required
+def admin_view_folder(encoded_path):
+    try:
+        decoded_path = decode_folder_path(encoded_path)
+        if not decoded_path:
+            return render_template('error.html')
+        
+        s3_client = get_s3_client()
+        
+        folder_prefix = decoded_path + '/' if not decoded_path.endswith('/') else decoded_path
+        
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=folder_prefix,
+            Delimiter='/'
+        )
+        
+        folders = []
+        files = []
+        
+        for prefix in response.get('CommonPrefixes', []):
+            prefix_path = prefix.get('Prefix', '')
+            folder_name = prefix_path.rstrip('/').split('/')[-1]
+            
+            encoded_path = encode_folder_path(prefix_path.rstrip('/'))
+            
+            folders.append({
+                'name': folder_name,
+                'path': prefix_path,
+                'encoded_path': encoded_path
+            })
+        
+        for obj in response.get('Contents', []):
+            key = obj.get('Key', '')
+            
+            if key == folder_prefix:
+                continue
+                
+            if '/' in key[len(folder_prefix):]:
+                continue
+                
+            file_name = key.split('/')[-1]
+            size = format_size(obj.get('Size', 0))
+            last_modified = obj.get('LastModified', datetime.now(pytz.UTC))
+            
+            if isinstance(last_modified, datetime):
+                last_modified = last_modified.strftime('%d/%m/%Y %H:%M')
+                
+            encoded_path = encode_folder_path(key)
+            
+            files.append({
+                'name': file_name,
+                'key': key,
+                'size': size,
+                'last_modified': last_modified,
+                'encoded_path': encoded_path
+            })
+        
+        folders.sort(key=lambda x: x['name'].lower())
+        files.sort(key=lambda x: x['name'].lower())
+        
+        breadcrumbs = []
+        path_parts = decoded_path.split('/')
+        current_path = ""
+        
+        for i, part in enumerate(path_parts):
+            if not part:
+                continue
+                
+            if current_path:
+                current_path += "/"
+            current_path += part
+            
+            encoded_path = encode_folder_path(current_path)
+            
+            breadcrumbs.append({
+                'name': part,
+                'path': current_path,
+                'encoded_path': encoded_path,
+                'is_last': i == len(path_parts) - 1
+            })
+        
+        return render_template('admin_folder_view.html', 
+                              folders=folders, 
+                              files=files, 
+                              breadcrumbs=breadcrumbs,
+                              folder_path=decoded_path,
+                              encoded_path=encoded_path)
+                              
+    except Exception as e:
+        print(f"Error in admin_view_folder: {str(e)}")
+        return render_template('error.html')
+
+@app.route('/admin/download/<path:encoded_path>')
+@admin_required
+def admin_download_folder(encoded_path):
+    folder_path = decode_folder_path(encoded_path)
+    if not folder_path:
+        return jsonify({"error": "Invalid path"}), 404
+        
+    try:
+        s3_client = get_s3_client()
+        response = s3_client.list_objects_v2(Bucket=BUCKET_NAME, Prefix=folder_path)
+        
+        if 'Contents' not in response:
+            return "Folder empty or not found", 404
+        
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for obj in response.get("Contents", []):
+                if obj["Key"] != folder_path:
+                    file_key = obj["Key"]
+                    file_data = s3_client.get_object(Bucket=BUCKET_NAME, Key=file_key)["Body"].read()
+                    relative_path = file_key[len(folder_path):] if folder_path.endswith('/') else file_key[len(folder_path)+1:]
+                    zip_file.writestr(relative_path, file_data)
+        
+        zip_buffer.seek(0)
+        folder_name = os.path.basename(folder_path.rstrip('/'))
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"{folder_name}.zip"
+        )
+        
+    except Exception as e:
+        print(f"Error in admin_download_folder: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/download-file/<path:encoded_path>')
+@admin_required
+def admin_download_file(encoded_path):
+    try:
+        decoded_path = decode_folder_path(encoded_path)
+        if not decoded_path:
+            return jsonify({"error": "Invalid path"}), 404
+            
+        s3_client = get_s3_client()
+        
+        try:
+            file_obj = s3_client.get_object(Bucket=BUCKET_NAME, Key=decoded_path)
+            file_size = file_obj['ContentLength']
+            file_name = os.path.basename(decoded_path)
+            
+            def generate():
+                for chunk in file_obj['Body'].iter_chunks(chunk_size=8192):
+                    yield chunk
+            
+            return app.response_class(
+                generate(),
+                mimetype='application/octet-stream',
+                headers={
+                    'Content-Disposition': f'attachment; filename={file_name}',
+                    'Content-Length': str(file_size)
+                }
+            )
+        except Exception as e:
+            print(f"Error downloading file: {str(e)}")
+            return jsonify({"error": "File not found"}), 404
+            
+    except Exception as e:
+        print(f"Error in admin_download_file: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/api/folder-files/<path:encoded_path>')
+@admin_required
+def admin_api_folder_files(encoded_path):
+    try:
+        folder_path = decode_folder_path(encoded_path)
+        if not folder_path:
+            return jsonify({"error": "Invalid path"}), 404
+            
+        s3_client = get_s3_client()
+        
+        folder_prefix = folder_path + '/' if not folder_path.endswith('/') else folder_path
+        
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=folder_prefix
+        )
+        
+        if 'Contents' not in response:
+            return jsonify({"files": []})
+            
+        files = []
+        for obj in response.get("Contents", []):
+            obj_key = obj["Key"]
+            
+            if obj_key == folder_prefix:
+                continue
+                
+            file_name = os.path.basename(obj_key)
+            encoded_path = encode_folder_path(obj_key)
+            
+            files.append({
+                'key': obj_key,
+                'name': file_name,
+                'encoded': encoded_path
+            })
+        
+        return jsonify({"files": files})
+        
+    except Exception as e:
+        print(f"Error in admin_api_folder_files: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+def verify_password(stored_password, provided_password):
+    salt = os.getenv('PASSWORD_SALT', 'default_salt')
+    hashed_provided = hashlib.sha256((provided_password + salt).encode()).hexdigest()
+    return hashed_provided == stored_password
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000, debug=True)
