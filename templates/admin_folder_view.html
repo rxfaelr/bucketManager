@@ -96,6 +96,39 @@
             color: #333;
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card-title-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .selected-count {
+            background-color: #0000FF;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .download-selected-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .download-selected-btn:hover {
+            background-color: #218838;
         }
         
         .breadcrumbs {
@@ -165,6 +198,19 @@
         
         .file-info {
             display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .file-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .file-details {
+            display: flex;
             flex-direction: column;
             gap: 5px;
         }
@@ -220,6 +266,130 @@
             padding: 20px;
             color: #6c757d;
         }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+            gap: 5px;
+        }
+        
+        .pagination-btn {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background-color: white;
+            color: #0000FF;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        
+        .pagination-btn:hover {
+            background-color: #f0f0f0;
+        }
+        
+        .pagination-btn.active {
+            background-color: #0000FF;
+            color: white;
+            border-color: #0000FF;
+        }
+        
+        .pagination-btn.disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .select-all-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .select-all-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .delete-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .delete-btn:hover {
+            background-color: #c82333;
+        }
+        
+        .delete-selected-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: none;
+            margin-left: 10px;
+        }
+        
+        .delete-selected-btn:hover {
+            background-color: #c82333;
+        }
+        
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 500px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .modal-title {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .modal-body {
+            margin: 20px 0;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        
+        .modal-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .modal-btn-cancel {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .modal-btn-delete {
+            background-color: #dc3545;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -232,7 +402,7 @@
             <div class="header-right">
                 {% if files %}
                 <a href="#" onclick="downloadAllFiles(); return false;" class="download-all-btn">
-                    📥 Download All
+                    📥 Baixar Tudo
                 </a>
                 {% endif %}
                 <a href="{{ url_for('admin_logout') }}" class="logout-btn">Logout</a>
@@ -253,7 +423,7 @@
         
         {% if folders %}
         <div class="card">
-            <h2 class="card-title">Folders</h2>
+            <h2 class="card-title">Pastas</h2>
             <ul class="folder-list">
                 {% for folder in folders %}
                 <li class="folder-item">
@@ -262,6 +432,7 @@
                     </a>
                     <div class="file-actions">
                         <a href="/admin/download/{{ folder.encoded_path }}" class="action-btn download-btn">Download</a>
+                        <button class="action-btn delete-btn" onclick="confirmDeleteFolder('{{ folder.name }}', '{{ folder.encoded_path }}')">Excluir</button>
                     </div>
                 </li>
                 {% endfor %}
@@ -271,20 +442,41 @@
         
         {% if files %}
         <div class="card">
-            <h2 class="card-title">Files</h2>
-            <ul class="file-list">
+            <div class="card-title">
+                <div class="card-title-left">
+                    <h2>Arquivos</h2>
+                    <span id="selectedCount" class="selected-count">0 selecionados</span>
+                </div>
+                <div class="card-title-right">
+                    <button id="downloadSelectedBtn" class="download-selected-btn" onclick="downloadSelectedFiles()">Baixar Selecionados</button>
+                    <button id="deleteSelectedBtn" class="delete-selected-btn" onclick="confirmDeleteSelected()">Excluir Selecionados</button>
+                </div>
+            </div>
+            
+            <div class="select-all-container">
+                <input type="checkbox" id="selectAllCheckbox" class="select-all-checkbox" onchange="toggleSelectAll()">
+                <label for="selectAllCheckbox">Selecionar Todos</label>
+            </div>
+            
+            <ul id="fileList" class="file-list">
                 {% for file in files %}
-                <li class="file-item">
+                <li class="file-item" data-page="1">
                     <div class="file-info">
-                        <div class="file-name">{{ file.name }}</div>
-                        <div class="file-metadata">Size: {{ file.size }} | Modified: {{ file.last_modified }}</div>
+                        <input type="checkbox" class="file-checkbox" data-encoded="{{ file.encoded_path }}" data-filename="{{ file.name }}" onchange="updateSelectedCount()">
+                        <div class="file-details">
+                            <div class="file-name">{{ file.name }}</div>
+                            <div class="file-metadata">Size: {{ file.size }} | Modified: {{ file.last_modified }}</div>
+                        </div>
                     </div>
                     <div class="file-actions">
                         <a href="/admin/download-file/{{ file.encoded_path }}" class="action-btn download-btn">Download</a>
+                        <button class="action-btn delete-btn" onclick="confirmDeleteFile('{{ file.name }}', '{{ file.encoded_path }}')">Excluir</button>
                     </div>
                 </li>
                 {% endfor %}
             </ul>
+            
+            <div id="pagination" class="pagination"></div>
         </div>
         {% endif %}
         
@@ -295,9 +487,247 @@
         {% endif %}
     </div>
     
+    <!-- Delete File Confirmation Modal -->
+    <div id="deleteFileModal" class="modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Confirmar Exclusão</h3>
+            <div class="modal-body">
+                Tem certeza que deseja excluir o arquivo "<span id="deleteFileName"></span>"?
+                <p>Esta ação não pode ser revertida.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal('deleteFileModal')">Cancelar</button>
+                <button id="confirmDeleteFileBtn" class="modal-btn modal-btn-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Folder Confirmation Modal -->
+    <div id="deleteFolderModal" class="modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Confirmar Exclusão da Pasta</h3>
+            <div class="modal-body">
+                Tem certeza que deseja excluir a pasta "<span id="deleteFolderName"></span>" e todos os seus conteúdos?
+                <p>Esta ação não pode ser revertida.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal('deleteFolderModal')">Cancelar</button>
+                <button id="confirmDeleteFolderBtn" class="modal-btn modal-btn-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Delete Selected Files Confirmation Modal -->
+    <div id="deleteSelectedModal" class="modal">
+        <div class="modal-content">
+            <h3 class="modal-title">Confirmar Exclusão de Arquivos Selecionados</h3>
+            <div class="modal-body">
+                Tem certeza que deseja excluir <span id="deleteSelectedCount"></span> arquivos selecionados?
+                <p>Esta ação não pode ser revertida.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-cancel" onclick="closeModal('deleteSelectedModal')">Cancelar</button>
+                <button id="confirmDeleteSelectedBtn" class="modal-btn modal-btn-delete">Excluir</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="downloadProgress" class="progress-text"></div>
     
     <script>
+        // Pagination settings
+        const itemsPerPage = 20;
+        let currentPage = 1;
+        let totalPages = 1;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            setupPagination();
+            updateSelectedCount();
+        });
+        
+        function setupPagination() {
+            const fileItems = document.querySelectorAll('.file-item');
+            if (fileItems.length === 0) return;
+            
+            totalPages = Math.ceil(fileItems.length / itemsPerPage);
+            
+            fileItems.forEach((item, index) => {
+                const page = Math.floor(index / itemsPerPage) + 1;
+                item.setAttribute('data-page', page);
+            });
+            
+            createPaginationControls();
+            
+            showPage(1);
+        }
+        
+        function createPaginationControls() {
+            const paginationContainer = document.getElementById('pagination');
+            paginationContainer.innerHTML = '';
+            
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'pagination-btn';
+            prevBtn.textContent = '«';
+            prevBtn.addEventListener('click', () => {
+                if (currentPage > 1) showPage(currentPage - 1);
+            });
+            paginationContainer.appendChild(prevBtn);
+            
+            for (let i = 1; i <= totalPages; i++) {
+                const pageBtn = document.createElement('button');
+                pageBtn.className = 'pagination-btn';
+                pageBtn.textContent = i;
+                pageBtn.addEventListener('click', () => showPage(i));
+                paginationContainer.appendChild(pageBtn);
+            }
+            
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'pagination-btn';
+            nextBtn.textContent = '»';
+            nextBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) showPage(currentPage + 1);
+            });
+            paginationContainer.appendChild(nextBtn);
+        }
+        
+        function showPage(page) {
+            currentPage = page;
+            
+            const fileItems = document.querySelectorAll('.file-item');
+            fileItems.forEach(item => {
+                item.style.display = 'none';
+            });
+            
+            const pageItems = document.querySelectorAll(`.file-item[data-page="${page}"]`);
+            pageItems.forEach(item => {
+                item.style.display = 'flex';
+            });
+            
+            const pageButtons = document.querySelectorAll('.pagination-btn');
+            pageButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent === page.toString()) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            const prevBtn = document.querySelector('.pagination-btn:first-child');
+            const nextBtn = document.querySelector('.pagination-btn:last-child');
+            
+            if (page === 1) {
+                prevBtn.classList.add('disabled');
+            } else {
+                prevBtn.classList.remove('disabled');
+            }
+            
+            if (page === totalPages) {
+                nextBtn.classList.add('disabled');
+            } else {
+                nextBtn.classList.remove('disabled');
+            }
+        }
+        
+        // File selection functionality
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.file-checkbox:checked');
+            const count = checkboxes.length;
+            const countElement = document.getElementById('selectedCount');
+            const downloadBtn = document.getElementById('downloadSelectedBtn');
+            const deleteBtn = document.getElementById('deleteSelectedBtn');
+            
+            if (count > 0) {
+                countElement.textContent = `${count} selecionados`;
+                countElement.style.display = 'inline-block';
+                downloadBtn.style.display = 'inline-block';
+                deleteBtn.style.display = 'inline-block';
+            } else {
+                countElement.style.display = 'none';
+                downloadBtn.style.display = 'none';
+                deleteBtn.style.display = 'none';
+            }
+            
+            // Update select all checkbox
+            const allCheckboxes = document.querySelectorAll('.file-checkbox');
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            
+            if (count === allCheckboxes.length && count > 0) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (count === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+        
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            const checkboxes = document.querySelectorAll('.file-checkbox');
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            updateSelectedCount();
+        }
+        
+        async function downloadSelectedFiles() {
+            const selectedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+            if (selectedCheckboxes.length === 0) return;
+            
+            const selectedFiles = Array.from(selectedCheckboxes).map(checkbox => {
+                return {
+                    encoded: checkbox.getAttribute('data-encoded'),
+                    name: checkbox.getAttribute('data-filename')
+                };
+            });
+            
+            try {
+                const progressText = document.getElementById('downloadProgress');
+                progressText.style.display = 'block';
+                progressText.textContent = 'Preparing download...';
+                
+                let downloadedCount = 0;
+                progressText.textContent = 'Starting downloads...';
+                
+                for (const file of selectedFiles) {
+                    try {
+                        const percentage = Math.round((downloadedCount / selectedFiles.length) * 100);
+                        progressText.textContent = `Downloading files... ${percentage}% started`;
+                        
+                        const link = document.createElement('a');
+                        link.href = `/admin/download-file/${file.encoded}`;
+                        link.download = file.name;
+                        link.setAttribute('target', '_blank');
+                        
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        downloadedCount++;
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                    } catch (error) {
+                        console.error(`Error downloading ${file.name}:`, error);
+                    }
+                }
+                
+                progressText.textContent = `Download complete: ${downloadedCount} files downloaded`;
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 5000);
+                
+            } catch (error) {
+                console.error('Error downloading files:', error);
+                const progressText = document.getElementById('downloadProgress');
+                progressText.textContent = 'Error downloading files';
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
         async function downloadAllFiles() {
             try {
                 const progressText = document.getElementById('downloadProgress');
@@ -352,6 +782,248 @@
                 console.error('Error downloading folder:', error);
                 const progressText = document.getElementById('downloadProgress');
                 progressText.textContent = 'Error downloading folder';
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+        
+        // Delete file confirmation
+        function confirmDeleteFile(fileName, encodedPath) {
+            document.getElementById('deleteFileName').textContent = fileName;
+            const confirmBtn = document.getElementById('confirmDeleteFileBtn');
+            
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.addEventListener('click', function() {
+                deleteFile(encodedPath);
+                closeModal('deleteFileModal');
+            });
+            
+            openModal('deleteFileModal');
+        }
+        
+        // Delete folder confirmation
+        function confirmDeleteFolder(folderName, encodedPath) {
+            document.getElementById('deleteFolderName').textContent = folderName;
+            const confirmBtn = document.getElementById('confirmDeleteFolderBtn');
+            
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.addEventListener('click', function() {
+                deleteFolder(encodedPath);
+                closeModal('deleteFolderModal');
+            });
+            
+            openModal('deleteFolderModal');
+        }
+        
+        function confirmDeleteSelected() {
+            const selectedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+            const count = selectedCheckboxes.length;
+            
+            if (count === 0) return;
+            
+            document.getElementById('deleteSelectedCount').textContent = count;
+            const confirmBtn = document.getElementById('confirmDeleteSelectedBtn');
+            
+            const newConfirmBtn = confirmBtn.cloneNode(true);
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+            
+            newConfirmBtn.addEventListener('click', function() {
+                deleteSelectedFiles();
+                closeModal('deleteSelectedModal');
+            });
+            
+            openModal('deleteSelectedModal');
+        }
+        
+        // Delete a single file
+        async function deleteFile(encodedPath) {
+            try {
+                const response = await fetch('/admin/delete-file', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ encoded_path: encodedPath })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Remove the file from the UI
+                    const fileItems = document.querySelectorAll('.file-item');
+                    fileItems.forEach(item => {
+                        const checkbox = item.querySelector('.file-checkbox');
+                        if (checkbox && checkbox.getAttribute('data-encoded') === encodedPath) {
+                            item.remove();
+                        }
+                    });
+                    
+                    // Show success message
+                    const progressText = document.getElementById('downloadProgress');
+                    progressText.style.display = 'block';
+                    progressText.textContent = 'File deleted successfully';
+                    progressText.style.backgroundColor = '#28a745';
+                    setTimeout(() => {
+                        progressText.style.display = 'none';
+                    }, 3000);
+                    
+                    // Refresh pagination
+                    setupPagination();
+                } else {
+                    throw new Error(result.error || 'Failed to delete file');
+                }
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                
+                // Show error message
+                const progressText = document.getElementById('downloadProgress');
+                progressText.style.display = 'block';
+                progressText.textContent = 'Error deleting file: ' + error.message;
+                progressText.style.backgroundColor = '#dc3545';
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        // Delete a folder
+        async function deleteFolder(encodedPath) {
+            try {
+                const response = await fetch('/admin/delete-folder', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({ encoded_path: encodedPath })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Remove the folder from the UI
+                    const folderItems = document.querySelectorAll('.folder-item');
+                    folderItems.forEach(item => {
+                        const folderLink = item.querySelector('.folder-name');
+                        if (folderLink && folderLink.href.includes(encodedPath)) {
+                            item.remove();
+                        }
+                    });
+                    
+                    // Show success message
+                    const progressText = document.getElementById('downloadProgress');
+                    progressText.style.display = 'block';
+                    progressText.textContent = 'Folder deleted successfully';
+                    progressText.style.backgroundColor = '#28a745';
+                    setTimeout(() => {
+                        progressText.style.display = 'none';
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'Failed to delete folder');
+                }
+            } catch (error) {
+                console.error('Error deleting folder:', error);
+                
+                // Show error message
+                const progressText = document.getElementById('downloadProgress');
+                progressText.style.display = 'block';
+                progressText.textContent = 'Error deleting folder: ' + error.message;
+                progressText.style.backgroundColor = '#dc3545';
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 3000);
+            }
+        }
+        
+        // Delete selected files
+        async function deleteSelectedFiles() {
+            const selectedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+            if (selectedCheckboxes.length === 0) return;
+            
+            const selectedFiles = Array.from(selectedCheckboxes).map(checkbox => {
+                return {
+                    encoded: checkbox.getAttribute('data-encoded'),
+                    name: checkbox.getAttribute('data-filename')
+                };
+            });
+            
+            try {
+                const progressText = document.getElementById('downloadProgress');
+                progressText.style.display = 'block';
+                progressText.textContent = 'Deleting files...';
+                progressText.style.backgroundColor = '#28a745';
+                
+                let deletedCount = 0;
+                let failedCount = 0;
+                
+                for (const file of selectedFiles) {
+                    try {
+                        const response = await fetch('/admin/delete-file', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token() }}'
+                            },
+                            body: JSON.stringify({ encoded_path: file.encoded })
+                        });
+                        
+                        if (response.ok) {
+                            deletedCount++;
+                            
+                            // Remove the file from the UI
+                            const fileItems = document.querySelectorAll('.file-item');
+                            fileItems.forEach(item => {
+                                const checkbox = item.querySelector('.file-checkbox');
+                                if (checkbox && checkbox.getAttribute('data-encoded') === file.encoded) {
+                                    item.remove();
+                                }
+                            });
+                        } else {
+                            failedCount++;
+                        }
+                    } catch (error) {
+                        console.error(`Error deleting ${file.name}:`, error);
+                        failedCount++;
+                    }
+                }
+                
+                // Update message based on results
+                if (failedCount === 0) {
+                    progressText.textContent = `Successfully deleted ${deletedCount} files`;
+                } else {
+                    progressText.textContent = `Deleted ${deletedCount} files, ${failedCount} failed`;
+                    progressText.style.backgroundColor = '#ffc107';
+                }
+                
+                setTimeout(() => {
+                    progressText.style.display = 'none';
+                }, 3000);
+                
+                // Refresh pagination
+                setupPagination();
+                updateSelectedCount();
+                
+            } catch (error) {
+                console.error('Error deleting files:', error);
+                const progressText = document.getElementById('downloadProgress');
+                progressText.style.display = 'block';
+                progressText.textContent = 'Error deleting files: ' + error.message;
+                progressText.style.backgroundColor = '#dc3545';
                 setTimeout(() => {
                     progressText.style.display = 'none';
                 }, 3000);

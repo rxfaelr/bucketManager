@@ -1032,5 +1032,77 @@ def verify_password(stored_password, provided_password):
     hashed_provided = hashlib.sha256((provided_password + salt).encode()).hexdigest()
     return hashed_provided == stored_password
 
+@app.route('/admin/delete-file', methods=['POST'])
+@admin_required
+def admin_delete_file():
+    try:
+        data = request.json
+        encoded_path = data.get('encoded_path')
+        
+        if not encoded_path:
+            return jsonify({"error": "No file path provided"}), 400
+            
+        file_path = decode_folder_path(encoded_path)
+        if not file_path:
+            return jsonify({"error": "Invalid file path"}), 400
+            
+        s3_client = get_s3_client()
+        
+        # Check if file exists
+        try:
+            s3_client.head_object(Bucket=BUCKET_NAME, Key=file_path)
+        except Exception as e:
+            return jsonify({"error": "File not found"}), 404
+            
+        # Delete the file
+        s3_client.delete_object(Bucket=BUCKET_NAME, Key=file_path)
+        
+        logging.info(f"Admin deleted file: {file_path}")
+        return jsonify({"message": "File deleted successfully"})
+        
+    except Exception as e:
+        logging.error(f"Error deleting file: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/admin/delete-folder', methods=['POST'])
+@admin_required
+def admin_delete_folder():
+    try:
+        data = request.json
+        encoded_path = data.get('encoded_path')
+        
+        if not encoded_path:
+            return jsonify({"error": "No folder path provided"}), 400
+            
+        folder_path = decode_folder_path(encoded_path)
+        if not folder_path:
+            return jsonify({"error": "Invalid folder path"}), 400
+            
+        s3_client = get_s3_client()
+        
+        # Ensure folder path ends with a slash
+        if not folder_path.endswith('/'):
+            folder_path += '/'
+            
+        # List all objects in the folder
+        response = s3_client.list_objects_v2(
+            Bucket=BUCKET_NAME,
+            Prefix=folder_path
+        )
+        
+        if 'Contents' not in response:
+            return jsonify({"error": "Folder not found or empty"}), 404
+            
+        # Delete all objects in the folder
+        for obj in response.get('Contents', []):
+            s3_client.delete_object(Bucket=BUCKET_NAME, Key=obj['Key'])
+            
+        logging.info(f"Admin deleted folder and contents: {folder_path}")
+        return jsonify({"message": "Folder deleted successfully"})
+        
+    except Exception as e:
+        logging.error(f"Error deleting folder: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=3000, debug=True)
