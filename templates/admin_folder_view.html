@@ -270,22 +270,36 @@
         .pagination {
             display: flex;
             justify-content: center;
+            align-items: center;
             margin-top: 20px;
             gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .pagination-info {
+            margin: 0 10px;
+            color: #6c757d;
+            font-size: 14px;
         }
         
         .pagination-btn {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
+            min-width: 36px;
+            height: 36px;
+            border: 1px solid #dee2e6;
             background-color: white;
             color: #0000FF;
-            cursor: pointer;
             border-radius: 4px;
-            transition: background-color 0.3s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
         }
         
-        .pagination-btn:hover {
-            background-color: #f0f0f0;
+        .pagination-btn:hover:not(:disabled) {
+            background-color: #e9ecef;
+            border-color: #dee2e6;
         }
         
         .pagination-btn.active {
@@ -294,9 +308,17 @@
             border-color: #0000FF;
         }
         
-        .pagination-btn.disabled {
-            color: #ccc;
+        .pagination-btn:disabled {
+            color: #6c757d;
             cursor: not-allowed;
+        }
+        
+        .pagination-ellipsis {
+            min-width: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
         }
         
         .select-all-container {
@@ -465,7 +487,7 @@
                         <input type="checkbox" class="file-checkbox" data-encoded="{{ file.encoded_path }}" data-filename="{{ file.name }}" onchange="updateSelectedCount()">
                         <div class="file-details">
                             <div class="file-name">{{ file.name }}</div>
-                            <div class="file-metadata">Size: {{ file.size }} | Modified: {{ file.last_modified }}</div>
+                            <div class="file-metadata">Tamanho: {{ file.size }} | Modificado: {{ file.last_modified }}</div>
                         </div>
                     </div>
                     <div class="file-actions">
@@ -563,67 +585,117 @@
         
         function createPaginationControls() {
             const paginationContainer = document.getElementById('pagination');
+            if (!paginationContainer) return;
+            
             paginationContainer.innerHTML = '';
             
+            // Previous button
             const prevBtn = document.createElement('button');
             prevBtn.className = 'pagination-btn';
-            prevBtn.textContent = '«';
+            prevBtn.innerHTML = '&laquo;';
+            prevBtn.disabled = currentPage === 1;
             prevBtn.addEventListener('click', () => {
                 if (currentPage > 1) showPage(currentPage - 1);
             });
             paginationContainer.appendChild(prevBtn);
             
-            for (let i = 1; i <= totalPages; i++) {
+            // Determine which page buttons to show
+            const maxVisibleButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisibleButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisibleButtons - 1);
+            
+         
+            if (endPage - startPage + 1 < maxVisibleButtons) {
+                startPage = Math.max(1, endPage - maxVisibleButtons + 1);
+            }
+            
+            // First page button (if not in range)
+            if (startPage > 1) {
+                const firstPageBtn = document.createElement('button');
+                firstPageBtn.className = 'pagination-btn';
+                firstPageBtn.textContent = '1';
+                firstPageBtn.addEventListener('click', () => showPage(1));
+                paginationContainer.appendChild(firstPageBtn);
+                
+               
+                if (startPage > 2) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'pagination-ellipsis';
+                    ellipsis.textContent = '...';
+                    paginationContainer.appendChild(ellipsis);
+                }
+            }
+            
+            // Page buttons in the visible range
+            for (let i = startPage; i <= endPage; i++) {
                 const pageBtn = document.createElement('button');
                 pageBtn.className = 'pagination-btn';
+                if (i === currentPage) pageBtn.classList.add('active');
                 pageBtn.textContent = i;
                 pageBtn.addEventListener('click', () => showPage(i));
                 paginationContainer.appendChild(pageBtn);
             }
             
+            // Last page button (if not in range)
+            if (endPage < totalPages) {
+                // Add ellipsis if there's a gap
+                if (endPage < totalPages - 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'pagination-ellipsis';
+                    ellipsis.textContent = '...';
+                    paginationContainer.appendChild(ellipsis);
+                }
+                
+                const lastPageBtn = document.createElement('button');
+                lastPageBtn.className = 'pagination-btn';
+                lastPageBtn.textContent = totalPages;
+                lastPageBtn.addEventListener('click', () => showPage(totalPages));
+                paginationContainer.appendChild(lastPageBtn);
+            }
+            
+            // Next button
             const nextBtn = document.createElement('button');
             nextBtn.className = 'pagination-btn';
-            nextBtn.textContent = '»';
+            nextBtn.innerHTML = '&raquo;';
+            nextBtn.disabled = currentPage === totalPages;
             nextBtn.addEventListener('click', () => {
                 if (currentPage < totalPages) showPage(currentPage + 1);
             });
             paginationContainer.appendChild(nextBtn);
+            
+            // Add page info text
+            const pageInfo = document.createElement('span');
+            pageInfo.className = 'pagination-info';
+            pageInfo.textContent = `Página ${currentPage} de ${totalPages}`;
+            paginationContainer.appendChild(pageInfo);
         }
         
-        function showPage(page) {
-            currentPage = page;
+        function showPage(pageNumber) {
+            if (pageNumber < 1 || pageNumber > totalPages) return;
+            
+            currentPage = pageNumber;
             
             const fileItems = document.querySelectorAll('.file-item');
-            fileItems.forEach(item => {
-                item.style.display = 'none';
-            });
+            const itemsPerPage = 20;
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
             
-            const pageItems = document.querySelectorAll(`.file-item[data-page="${page}"]`);
-            pageItems.forEach(item => {
-                item.style.display = 'flex';
-            });
+            let visibleCount = 0;
             
-            const pageButtons = document.querySelectorAll('.pagination-btn');
-            pageButtons.forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.textContent === page.toString()) {
-                    btn.classList.add('active');
+            fileItems.forEach((item, index) => {
+                if (index >= startIndex && index < endIndex) {
+                    item.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
                 }
             });
             
-            const prevBtn = document.querySelector('.pagination-btn:first-child');
-            const nextBtn = document.querySelector('.pagination-btn:last-child');
+            createPaginationControls();
             
-            if (page === 1) {
-                prevBtn.classList.add('disabled');
-            } else {
-                prevBtn.classList.remove('disabled');
-            }
-            
-            if (page === totalPages) {
-                nextBtn.classList.add('disabled');
-            } else {
-                nextBtn.classList.remove('disabled');
+            const pageInfoElement = document.querySelector('.pagination-info');
+            if (pageInfoElement) {
+                pageInfoElement.textContent = `Page ${currentPage} of ${totalPages}`;
             }
         }
         
